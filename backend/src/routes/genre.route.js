@@ -1,15 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
-const movieController = require("../controllers/movie.controller");
+const genreController = require("../controllers/genre.controller");
 const { verifyToken } = require("../middlewares/auth.middleware");
 const { isAdmin, isUser, isRole } = require("../middlewares/role.middleware");
 
 /**
  * USER + ADMIN
  */
-router.get("/", movieController.getAllMovies);
-router.get("/:id", movieController.getMovieById);
+router.get("/", genreController.getAllGenres);
 
 /**
  * ADMIN
@@ -18,21 +17,21 @@ router.post(
   "/",
   verifyToken,
   isAdmin,
-  movieController.createMovie
+  genreController.createGenre
 );
 
 router.put(
   "/:id",
   verifyToken,
   isAdmin,
-  movieController.updateMovie
+  genreController.updateGenre
 );
 
 router.delete(
   "/:id",
   verifyToken,
   isAdmin,
-  movieController.deleteMovie
+  genreController.deleteGenre
 );
 
 module.exports = router;

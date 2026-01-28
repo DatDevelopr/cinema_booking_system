@@ -1,18 +1,17 @@
+// src/server.js
+require("dotenv").config();
 const app = require("./app");
-const sequelize = require("./config/database");
+const { sequelize } = require("./models");
 
-const PORT = process.env.PORT || 5000;
+(async () => {
+  try {
+    await sequelize.authenticate();
+    console.log("✅ MySQL connected");
 
-// Test kết nối database trước khi start server
-sequelize
-  .authenticate()
-  .then(() => {
-    console.log("✅ Database connected successfully");
-
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running at http://localhost:${PORT}`);
+    app.listen(process.env.PORT, () => {
+      console.log(`🚀 Server running at http://localhost:${process.env.PORT}`);
     });
-  })
-  .catch((err) => {
-    console.error("❌ Database connection failed:", err);
-  });
+  } catch (error) {
+    console.error("❌ Unable to connect to DB:", error);
+  }
+})();

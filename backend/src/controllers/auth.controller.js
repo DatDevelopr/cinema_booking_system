@@ -1,73 +1,123 @@
+const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-const { User, Role } = require("../models"); // Sequelize models
 
-// Register
-exports.register = async (req, res) => {
+const { User } = require("../models");
+const transporter = require("../utils/mailer");
+
+/**
+ * GỬI LINK RESET PASSWORD
+ */
+exports.forgotPassword = async (req, res) => {
   try {
-    const { full_name, email, password, phone, role } = req.body;
+    const { email } = req.body;
 
-    // Check existing email
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ message: "Email already exists" });
+    if (!email) {
+      return res.status(400).json({ message: "Vui lòng nhập email" });
     }
 
-    // Hash password
-    const password_hash = await bcrypt.hash(password, 10);
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({
+        message: "Email không tồn tại",
+      });
+    }
 
-    // Find role
-    const roleRecord = await Role.findOne({ where: { role_name: role || "CUSTOMER" } });
+    // Token reset (15 phút)
+    const resetToken = jwt.sign(
+      { user_id: user.user_id },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
 
-    const newUser = await User.create({
-      full_name,
-      email,
-      password_hash,
-      phone,
-      role_id: roleRecord.role_id,
+    const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
+
+    await transporter.sendMail({
+      from: `"Cinema Booking System" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: "Đặt lại mật khẩu",
+      html: `
+        <p>Xin chào <b>${user.full_name}</b>,</p>
+        <p>Bạn đã yêu cầu đặt lại mật khẩu.</p>
+        <p>Vui lòng click vào link bên dưới (hiệu lực 15 phút):</p>
+        <a href="${resetLink}">${resetLink}</a>
+        <p>Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>
+      `,
     });
 
-    res.json({ message: "Register success", user_id: newUser.user_id });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    res.json({
+      message: "Link đặt lại mật khẩu đã được gửi vào email",
+    });
+  } catch (error) {
+    console.error("FORGOT PASSWORD ERROR:", error);
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
-// Login
-exports.login = async (req, res) => {
+
+
+/**
+ * RESET PASSWORD
+ * POST /api/auth/reset-password
+ * body: { token, password, confirm_password }
+ */
+exports.resetPassword = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(400).json({ message: "User not found" });
+    const { token, password, confirm_password } = req.body;
 
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return res.status(400).json({ message: "Incorrect password" });
+    // 1. Validate input
+    if (!token || !password || !confirm_password) {
+      return res.status(400).json({
+        message: "Thiếu token hoặc mật khẩu",
+      });
+    }
 
-    // Save session
-    req.session.user = {
-      id: user.user_id,
-      full_name: user.full_name,
-      role: (await Role.findByPk(user.role_id)).role_name,
-    };
+    if (password !== confirm_password) {
+      return res.status(400).json({
+        message: "Mật khẩu nhập lại không khớp",
+      });
+    }
 
-    res.json({ message: "Login success", session: req.session.user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Mật khẩu phải ít nhất 6 ký tự",
+      });
+    }
+
+    // 2. Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({
+        message: "Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn",
+      });
+    }
+
+    const userId = decoded.user_id;
+
+    // 3. Tìm user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        message: "Người dùng không tồn tại",
+      });
+    }
+
+    // 4. Hash mật khẩu mới
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 5. Cập nhật mật khẩu
+    await user.update({
+      password_hash: hashedPassword,
+    });
+
+    return res.json({
+      message: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại",
+    });
+  } catch (error) {
+    console.error("RESET PASSWORD ERROR:", error);
+    return res.status(500).json({
+      message: "Lỗi server",
+    });
   }
-};
-
-// Logout
-exports.logout = (req, res) => {
-  req.session.destroy((err) => {
-    if (err) return res.status(500).json({ message: "Logout failed" });
-    res.clearCookie("cinema.sid");
-    res.json({ message: "Logout success" });
-  });
-};
-
-// Check current user session
-exports.me = (req, res) => {
-  if (req.session.user) res.json({ user: req.session.user });
-  else res.status(401).json({ message: "Not logged in" });
 };
