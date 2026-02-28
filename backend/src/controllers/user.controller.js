@@ -1,146 +1,5 @@
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const { User } = require("../models");
-
-/**
- * ĐĂNG KÝ NGƯỜI DÙNG
- */
-exports.register = async (req, res) => {
-  try {
-    const {
-      full_name,
-      email,
-      password,
-      confirm_password,
-      phone,
-      gender,
-      date_of_birth,
-    } = req.body;
-
-    /* ================== VALIDATE ================== */
-
-    if (!full_name || !email || !password || !confirm_password || !phone) {
-      return res.status(400).json({
-        message: "Vui lòng nhập đầy đủ thông tin bắt buộc",
-      });
-    }
-
-    if (password !== confirm_password) {
-      return res.status(400).json({
-        message: "Mật khẩu nhập lại không khớp",
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        message: "Mật khẩu phải ít nhất 6 ký tự",
-      });
-    }
-
-    /* ================== CHECK EMAIL ================== */
-    const existingEmail = await User.findOne({ where: { email } });
-    if (existingEmail) {
-      return res.status(409).json({
-        message: "Email đã được sử dụng",
-      });
-    }
-
-    /* ================== CHECK PHONE ================== */
-    const existingPhone = await User.findOne({ where: { phone } });
-    if (existingPhone) {
-      return res.status(409).json({
-        message: "Số điện thoại đã được sử dụng",
-      });
-    }
-
-    /* ================== HASH PASSWORD ================== */
-    const password_hash = await bcrypt.hash(password, 10);
-
-    /* ================== CREATE USER ================== */
-    const newUser = await User.create({
-      full_name,
-      email,
-      password_hash,
-      phone,
-      gender: gender || "other",
-      date_of_birth: date_of_birth || null,
-      role_id: 2,        // USER
-      status: 1,         // active
-      created_at: new Date(),
-    });
-
-    return res.status(201).json({
-      message: "Đăng ký tài khoản thành công",
-      user: {
-        user_id: newUser.user_id,
-        full_name: newUser.full_name,
-        email: newUser.email,
-        phone: newUser.phone,
-        role_id: newUser.role_id,
-      },
-    });
-  } catch (error) {
-    console.error("REGISTER ERROR:", error);
-    return res.status(500).json({
-      message: "Lỗi server",
-    });
-  }
-};
-
-
-/**
- * ĐĂNG NHẬP
- * POST /api/users/login
- */
-exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        message: "Thiếu email hoặc mật khẩu",
-      });
-    }
-
-    const user = await User.findOne({ where: { email } });
-    if (!user || !user.password_hash) {
-      return res.status(401).json({
-        message: "Email hoặc mật khẩu không đúng",
-      });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
-      return res.status(401).json({
-        message: "Email hoặc mật khẩu không đúng",
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        user_id: user.user_id,
-        role_id: user.role_id,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    res.json({
-      message: "Đăng nhập thành công",
-      token,
-      user: {
-        user_id: user.user_id,
-        full_name: user.full_name,
-        email: user.email,
-        role_id: user.role_id,
-      },
-    });
-  } catch (error) {
-    console.error("LOGIN ERROR:", error);
-    res.status(500).json({ message: "Lỗi server" });
-  }
-};
-
 
 /**
  * ADMIN - LẤY DANH SÁCH USER
@@ -154,6 +13,34 @@ exports.getAllUsers = async (req, res) => {
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.getUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findOne({
+      where: { user_id: id },
+      attributes: {
+        exclude: ["password_hash"], // không trả password
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Không tìm thấy user",
+      });
+    }
+
+    res.status(200).json({
+      data: user,
+    });
+  } catch (error) {
+    console.error("Get user by id error:", error);
+    res.status(500).json({
+      message: "Lỗi server",
+    });
   }
 };
 
@@ -214,6 +101,16 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
+
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User không tồn tại",
+      });
+    }
+
+    // Lấy dữ liệu từ body
     const {
       full_name,
       phone,
@@ -221,31 +118,63 @@ exports.updateUser = async (req, res) => {
       gender,
       date_of_birth,
       status,
+      avatar
     } = req.body;
 
-    const user = await User.findByPk(id);
-    if (!user) {
-      return res.status(404).json({
-        message: "User không tồn tại",
-      });
-    }
+    // Object chứa field cần update
+    const updateData = {};
+
+    if (full_name !== undefined) updateData.full_name = full_name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (role_id !== undefined) updateData.role_id = role_id;
+    if (gender !== undefined) updateData.gender = gender;
+    if (date_of_birth !== undefined) updateData.date_of_birth = date_of_birth;
+    if (status !== undefined) updateData.status = status;
+    if (avatar !== undefined) updateData.avatar = avatar;
+
+    await user.update(updateData);
+
+    return res.json({
+      message: "Cập nhật user thành công",
+      data: user,
+    });
+
+  } catch (error) {
+    console.error("UPDATE USER ERROR:", error);
+    res.status(500).json({
+      message: "Lỗi server",
+    });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+
+    const user = await User.findByPk(userId);
+    if (!user)
+      return res.status(404).json({ message: "User không tồn tại" });
 
     await user.update({
-      full_name,
-      phone,
-      role_id,
-      gender,
-      date_of_birth,
-      status,
+      full_name: req.body.full_name,
+      phone: req.body.phone,
+      gender: req.body.gender,
+      date_of_birth: req.body.date_of_birth,
+      avatar: req.file?.filename || user.avatar,
     });
 
     res.json({
-      message: "Cập nhật user thành công",
+      message: "Cập nhật thành công",
+      user,
     });
-  } catch (error) {
+
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
+
+
 
 /**
  * ADMIN - XOÁ USER

@@ -2,41 +2,44 @@ const jwt = require("jsonwebtoken");
 
 exports.verifyToken = (req, res, next) => {
   try {
-    const authHeader = req.headers["authorization"];
+    const authHeader = req.headers.authorization;
 
-    if (!authHeader) {
+    /* ❌ Không có Authorization */
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        message: "Không có token",
+        message: "Unauthorized",
       });
     }
 
-    const token = authHeader.split(" ")[1]; // Bearer xxx
+    /* ⭐ Lấy token */
+    const token = authHeader.split(" ")[1];
 
-    if (!token) {
-      return res.status(401).json({
-        message: "Token không hợp lệ",
-      });
-    }
+    /* ⭐ Verify access token */
+    const decoded = jwt.verify(
+      token,
+      process.env.ACCESS_TOKEN_SECRET
+    );
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
+    /* ⭐ Gắn user vào request */
     req.user = {
       user_id: decoded.user_id,
       role_id: decoded.role_id,
     };
 
     next();
+
   } catch (error) {
-    // 4. Token hết hạn
+
+    /* ❌ Token hết hạn */
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({
-        message: "Token đã hết hạn, vui lòng đăng nhập lại",
+        message: "Access token expired",
       });
     }
 
-    // 5. Token không hợp lệ
+    /* ❌ Token sai */
     return res.status(401).json({
-      message: "Token không hợp lệ",
+      message: "Invalid token",
     });
   }
 };

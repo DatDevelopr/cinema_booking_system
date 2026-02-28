@@ -2,49 +2,61 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/user.controller");
 const { verifyToken } = require("../middlewares/auth.middleware");
-const { isAdmin, isUser, isRole } = require("../middlewares/role.middleware");
+const { isAdmin, isRole } = require("../middlewares/role.middleware");
 
+/* ================= PROFILE ================= */
 
-router.post("/register", userController.register);
-router.post("/login", userController.login);
-
+// Lấy profile của chính mình
 router.get(
   "/profile",
   verifyToken,
-  isRole([1, 2]),
+  isRole([1, 2]), // admin + user
   userController.getProfile
 );
 
+
+router.get(
+  "/:id",
+  verifyToken,
+  userController.getUserById
+);
+
+// Update profile của chính mình
+router.put(
+  "/profile",
+  verifyToken,
+  isRole([1, 2]),
+  userController.updateProfile
+);
+
+/* ================= ADMIN ================= */
 
 // Lấy danh sách người dùng
 router.get(
   "/",
   verifyToken,
-  isAdmin,
   userController.getAllUsers
 );
 
-// Tạo người dùng mới
+// Tạo user mới
 router.post(
   "/",
   verifyToken,
-  isAdmin,
   userController.createUser
 );
 
-// Cập nhật người dùng
+// Admin update user khác
 router.put(
   "/:id",
   verifyToken,
-  isAdmin,
   userController.updateUser
 );
 
-// Xoá người dùng
+// Xoá user
 router.delete(
   "/:id",
   verifyToken,
-  isAdmin,
   userController.deleteUser
 );
+
 module.exports = router;

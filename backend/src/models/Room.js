@@ -1,16 +1,41 @@
-// models/Room.js
 module.exports = (sequelize, DataTypes) => {
-  return sequelize.define("Room", {
-    room_id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true
+  return sequelize.define(
+    "Room",
+    {
+      room_id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+      },
+
+      cinema_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+
+      room_name: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+      },
+
+      rows: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+
+      seats_per_row: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+
+      total_seats: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
     },
-    cinema_id: DataTypes.INTEGER,
-    room_name: DataTypes.STRING(50),
-    total_seats: DataTypes.INTEGER
-  }, {
-    tableName: "rooms",
-    timestamps: false
-  });
+    {
+      tableName: "rooms",
+      timestamps: false,
+    }
+  );
 };

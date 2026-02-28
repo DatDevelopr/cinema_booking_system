@@ -1,17 +1,41 @@
-// models/Seat.js
 module.exports = (sequelize, DataTypes) => {
-  return sequelize.define("Seat", {
-    seat_id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true
+  return sequelize.define(
+    "Seat",
+    {
+      seat_id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+      },
+
+      room_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+
+      seat_row: {
+        type: DataTypes.STRING(2), // A, B, C...
+        allowNull: false,
+      },
+
+      seat_number: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+
+      seat_code: {
+        type: DataTypes.STRING(10), // A1, A2...
+        allowNull: false,
+      },
+
+      seat_type: {
+        type: DataTypes.ENUM("NORMAL", "VIP", "COUPLE"),
+        defaultValue: "NORMAL",
+      },
     },
-    room_id: DataTypes.INTEGER,
-    seat_row: DataTypes.CHAR(1),
-    seat_number: DataTypes.INTEGER,
-    seat_type: DataTypes.STRING(20)
-  }, {
-    tableName: "seats",
-    timestamps: false
-  });
+    {
+      tableName: "seats",
+      timestamps: false,
+    }
+  );
 };

@@ -10,6 +10,8 @@ module.exports = (sequelize, DataTypes) => {
     email: DataTypes.STRING(100),
     password_hash: DataTypes.STRING(255),
     phone: DataTypes.STRING(20),
+    date_of_birth: DataTypes.DATEONLY,
+    gender: DataTypes.ENUM("male", "female"),
     role_id: DataTypes.INTEGER,
     created_at: DataTypes.DATE,
     status: DataTypes.TINYINT

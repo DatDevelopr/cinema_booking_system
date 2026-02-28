@@ -1,7 +1,17 @@
 // src/server.js
 require("dotenv").config();
+const http = require("http");
 const app = require("./app");
 const { sequelize } = require("./models");
+const socket = require("./socket");
+const releaseSeatJob = require("./jobs/releaseSeat.job");
+
+
+const server = http.createServer(app);
+socket.init(server);
+
+// start cron
+releaseSeatJob();
 
 (async () => {
   try {

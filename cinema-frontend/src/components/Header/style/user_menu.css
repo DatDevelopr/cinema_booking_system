@@ -1,0 +1,140 @@
+/* ===== USER MENU ===== */
+.user-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* ===== TRIGGER ===== */
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.user-trigger:hover {
+  background: #fc8905;
+}
+
+.user-trigger img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e5e5;
+}
+
+.user-trigger span {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ===== DROPDOWN ===== */
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 220px;
+
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+
+  overflow: hidden;
+  animation: fadeDown 0.2s ease;
+  z-index: 999;
+}
+
+/* USER INFO */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+}
+
+.user-info img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+
+.user-info .name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* MENU ITEMS */
+.user-dropdown ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.user-dropdown li {
+  padding: 12px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.user-dropdown li:hover {
+  background: #fc8905;
+    color: white;
+  padding-left: 20px;
+}
+
+.logout {
+  border-top: 1px solid #eee;
+  color: #e71a0f;
+  font-weight: 500;
+}
+
+.logout:hover {
+  background: #ffecec;
+}
+.login-btn{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ffedd5;
+  color: #fb923c;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+.login-btn:hover {
+  color: #f97316;
+  transform: translateY(-1px);
+}
+
+/* Animation */
+@keyframes fadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.user-dropdown a {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  width: 100%;
+}
+/* Mobile */
+@media (max-width: 768px) {
+  .user-trigger span {
+    display: none;
+  }
+}
