@@ -15,7 +15,7 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 
-app.use("/api/user", require("./routes/user.routes"));
+app.use("/api/user", require("./routes/user.route"));
 app.use("/api/auth", require("./routes/auth.route"));
 app.use("/api/movies", require("./routes/movie.route"));
 app.use("/api/genres", require("./routes/genre.route"));
@@ -26,6 +26,7 @@ app.use("/api/rooms", require("./routes/room.route"));
 app.use("/api/showtimes", require("./routes/showtime.route"));
 app.use("/api/payments", require("./routes/payment.route"));
 app.use("/api/otp", require("./routes/otp.route"));
+app.use("/api/upload", require("./routes/upload.route"));
 
 
 

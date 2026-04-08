@@ -1,13 +1,23 @@
 const { Op } = require("sequelize");
 const { Genre } = require("../models");
 
-/**
- * GET /genre
- * Query:
- *   - page (default: 1)
- *   - search (optional)
- */
 exports.getAllGenres = async (req, res) => {
+  try {
+    const genres = await Genre.findAll();
+    console.log("ALL GENRES:", genres);
+
+    return res.json({
+      data: genres,
+    });
+  } catch (error) {
+    console.error("GET GENRES ERROR:", error);
+    return res.status(500).json({
+      message: "Lỗi server",
+    });
+  }
+};
+
+exports.get10Genres = async (req, res) => {
   try {
     const {
       page = 1,

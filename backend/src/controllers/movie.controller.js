@@ -1,4 +1,4 @@
-const { Movie, Genre } = require("../models");
+const { Movie, Genre, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
 /* ================= HELPER ================= */
@@ -18,31 +18,67 @@ const generateSlug = (text) => {
 ===================================================== */
 exports.getAllMovies = async (req, res) => {
   try {
-    const {
+    let {
       page = 1,
       limit = 10,
       search = "",
       sortField = "created_at",
       sortOrder = "DESC",
+      genre_id,
+      isAdmin = false,
     } = req.query;
 
+    page = Number(page);
+    limit = Number(limit);
     const offset = (page - 1) * limit;
 
-    const { count, rows } = await Movie.findAndCountAll({
-      where: {
-        status: 1,
-        [Op.or]: [
-          { title: { [Op.like]: `%${search}%` } },
-          { director: { [Op.like]: `%${search}%` } },
-        ],
-      },
-      include: {
+    /* ================= WHERE ================= */
+    const where = {};
+
+    if (search) {
+      where[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { director: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    /* ================= SORT (WHITELIST) ================= */
+    const allowedSortFields = [
+      "title",
+      "duration",
+      "release_date",
+      "created_at",
+    ];
+
+    const allowedSortOrder = ["ASC", "DESC"];
+
+    const finalSortField = allowedSortFields.includes(sortField)
+      ? sortField
+      : "created_at";
+
+    const finalSortOrder = allowedSortOrder.includes(sortOrder.toUpperCase())
+      ? sortOrder.toUpperCase()
+      : "DESC";
+
+    /* ================= INCLUDE ================= */
+    const include = [
+      {
         model: Genre,
         through: { attributes: [] },
+        ...(genre_id && {
+          where: { genre_id },
+        }),
       },
-      order: [[sortField, sortOrder.toUpperCase()]],
-      limit: Number(limit),
-      offset: Number(offset),
+    ];
+
+    /* ================= QUERY ================= */
+    const { count, rows } = await Movie.findAndCountAll({
+      where,
+      include,
+      order: [[finalSortField, finalSortOrder]],
+      limit,
+      offset,
+      distinct: true, 
     });
 
     res.json({
@@ -50,15 +86,14 @@ exports.getAllMovies = async (req, res) => {
       pagination: {
         total: count,
         totalPages: Math.ceil(count / limit),
-        currentPage: Number(page),
+        currentPage: page,
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error("GET MOVIES ERROR:", error);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
-
 /* =====================================================
    CHI TIẾT PHIM
 ===================================================== */
@@ -84,7 +119,10 @@ exports.getMovieById = async (req, res) => {
 /* =====================================================
    TẠO PHIM
 ===================================================== */
+
 exports.createMovie = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const {
       title,
@@ -97,45 +135,74 @@ exports.createMovie = async (req, res) => {
       trailer_url,
       country,
       status,
+      genre_ids = [],
     } = req.body;
 
     if (!title || !duration) {
-      return res.status(400).json({ message: "Thiếu thông tin bắt buộc" });
+      return res.status(400).json({
+        message: "Thiếu thông tin bắt buộc",
+      });
     }
 
     const slug = generateSlug(title);
 
-    // kiểm tra trùng title
+    // check trùng title
     const titleExists = await Movie.findOne({ where: { title } });
     if (titleExists) {
       return res.status(409).json({ message: "Tên phim đã tồn tại" });
     }
 
-    // kiểm tra trùng slug
+    // check trùng slug
     const slugExists = await Movie.findOne({ where: { slug } });
     if (slugExists) {
       return res.status(409).json({ message: "Slug đã tồn tại" });
     }
 
-    const movie = await Movie.create({
-      title,
-      slug,
-      director,
-      actors,
-      description,
-      duration,
-      release_date,
-      poster_url,
-      trailer_url,
-      country,
-      status: status ?? 1,
-    });
+    // validate genre
+    if (genre_ids.length > 0) {
+      const genres = await Genre.findAll({
+        where: { genre_id: genre_ids },
+      });
+
+      if (genres.length !== genre_ids.length) {
+        await t.rollback();
+        return res.status(400).json({
+          message: "Có thể loại không tồn tại",
+        });
+      }
+    }
+
+    // tạo movie
+    const movie = await Movie.create(
+      {
+        title,
+        slug,
+        director,
+        actors,
+        description,
+        duration,
+        release_date,
+        poster_url,
+        trailer_url,
+        country,
+        status: status ?? 1,
+      },
+      { transaction: t }
+    );
+
+    // gán genre
+    if (genre_ids.length > 0) {
+      await movie.setGenres(genre_ids, { transaction: t });
+    }
+
+    await t.commit();
 
     res.status(201).json({
       message: "Tạo phim thành công",
       data: movie,
     });
   } catch (error) {
+    await t.rollback();
     console.error(error);
     res.status(500).json({ message: "Lỗi server" });
   }
@@ -145,16 +212,20 @@ exports.createMovie = async (req, res) => {
    CẬP NHẬT PHIM
 ===================================================== */
 exports.updateMovie = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const movie = await Movie.findByPk(req.params.id);
 
     if (!movie) {
-      return res.status(404).json({ message: "Phim không tồn tại" });
+      return res.status(404).json({
+        message: "Phim không tồn tại",
+      });
     }
 
-    const { title } = req.body;
+    const { title, genre_ids } = req.body;
 
-    // Nếu đổi title → kiểm tra trùng + cập nhật slug
+    // update title → slug
     if (title && title !== movie.title) {
       const exists = await Movie.findOne({
         where: {
@@ -164,7 +235,10 @@ exports.updateMovie = async (req, res) => {
       });
 
       if (exists) {
-        return res.status(409).json({ message: "Tên phim đã tồn tại" });
+        await t.rollback();
+        return res.status(409).json({
+          message: "Tên phim đã tồn tại",
+        });
       }
 
       const newSlug = generateSlug(title);
@@ -177,16 +251,51 @@ exports.updateMovie = async (req, res) => {
       });
 
       if (slugExists) {
-        return res.status(409).json({ message: "Slug đã tồn tại" });
+        await t.rollback();
+        return res.status(409).json({
+          message: "Slug đã tồn tại",
+        });
       }
 
       req.body.slug = newSlug;
     }
 
-    await movie.update(req.body);
+    // validate genre
+    if (genre_ids) {
+      if (!Array.isArray(genre_ids)) {
+        await t.rollback();
+        return res.status(400).json({
+          message: "genre_ids phải là mảng",
+        });
+      }
 
-    res.json({ message: "Cập nhật phim thành công" });
+      const genres = await Genre.findAll({
+        where: { genre_id: genre_ids },
+      });
+
+      if (genres.length !== genre_ids.length) {
+        await t.rollback();
+        return res.status(400).json({
+          message: "Có thể loại không tồn tại",
+        });
+      }
+    }
+
+    // update movie
+    await movie.update(req.body, { transaction: t });
+
+    // update genre (replace)
+    if (genre_ids) {
+      await movie.setGenres(genre_ids, { transaction: t });
+    }
+
+    await t.commit();
+
+    res.json({
+      message: "Cập nhật phim thành công",
+    });
   } catch (error) {
+    await t.rollback();
     console.error(error);
     res.status(500).json({ message: "Lỗi server" });
   }
@@ -209,4 +318,16 @@ exports.deleteMovie = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: "Lỗi server" });
   }
+};
+exports.toggleStatus = async (req, res) => {
+  const movie = await Movie.findByPk(req.params.id);
+
+  if (!movie) {
+    return res.status(404).json({ message: "Không tồn tại" });
+  }
+
+  movie.status = movie.status == 1 ? 0 : 1;
+  await movie.save();
+
+  res.json({ message: "Cập nhật trạng thái thành công" });
 };

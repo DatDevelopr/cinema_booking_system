@@ -1,18 +1,67 @@
-const { Room, Cinema, Seat } = require("../models");
+const { Room, Cinema, Seat, sequelize } = require("../models");
+const { Op } = require("sequelize");
 
 /**
  * GET ALL ROOMS
  */
 exports.getAllRooms = async (req, res) => {
   try {
-    const rooms = await Room.findAll({
-      include: { model: Cinema, attributes: ["cinema_id", "cinema_name"] },
-      order: [["room_name", "ASC"]],
+    const {
+      page = 1,
+      limit = 10,
+      cinema_id,
+      search,
+      sortBy = "room_name",
+      sortOrder = "ASC",
+    } = req.query;
+
+    const pageNumber = Number(page);
+    const limitNumber = Number(limit);
+    const offset = (pageNumber - 1) * limitNumber;
+
+    const where = {};
+
+    if (cinema_id) {
+      where.cinema_id = cinema_id;
+    }
+
+    if (search) {
+      where.room_name = {
+        [Op.like]: `%${search}%`,
+      };
+    }
+
+    // ✅ whitelist sort
+    const allowedSort = ["room_name", "total_seats", "rows"];
+    let order = [["room_name", "ASC"]];
+
+    if (allowedSort.includes(sortBy)) {
+      order = [[sortBy, sortOrder]];
+    }
+
+    const { rows, count } = await Room.findAndCountAll({
+      where,
+      include: {
+        model: Cinema,
+        attributes: ["cinema_id", "cinema_name"],
+      },
+      order,
+      limit: limitNumber,
+      offset,
     });
 
-    res.json(rooms);
+    res.json({
+      data: rows,
+      pagination: {
+        total: count,
+        page: pageNumber,
+        limit: limitNumber,
+        totalPages: Math.ceil(count / limitNumber),
+      },
+    });
+
   } catch (err) {
-    console.error(err);
+    console.error("GET ROOMS ERROR:", err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -35,7 +84,10 @@ exports.getRoomsByCinema = async (req, res) => {
 /**
  * CREATE ROOM + AUTO CREATE SEATS
  */
+
 exports.createRoom = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const { cinema_id, room_name, rows, seats_per_row } = req.body;
 
@@ -43,25 +95,33 @@ exports.createRoom = async (req, res) => {
       return res.status(400).json({ message: "Thiếu dữ liệu" });
     }
 
-    const cinema = await Cinema.findByPk(cinema_id);
-    if (!cinema) {
-      return res.status(404).json({ message: "Rạp không tồn tại" });
+    const exists = await Room.findOne({
+      where: { cinema_id, room_name },
+    });
+
+    if (exists) {
+      return res.status(409).json({
+        message: "Tên phòng đã tồn tại trong rạp",
+      });
     }
 
     const total_seats = rows * seats_per_row;
 
-    const room = await Room.create({
-      cinema_id,
-      room_name,
-      rows,
-      seats_per_row,
-      total_seats,
-    });
+    const room = await Room.create(
+      {
+        cinema_id,
+        room_name,
+        rows,
+        seats_per_row,
+        total_seats,
+      },
+      { transaction: t }
+    );
 
-    // 🔥 AUTO CREATE SEATS
+    // create seats
     const seats = [];
     for (let i = 0; i < rows; i++) {
-      const rowChar = String.fromCharCode(65 + i); // A, B, C
+      const rowChar = String.fromCharCode(65 + i);
 
       for (let j = 1; j <= seats_per_row; j++) {
         seats.push({
@@ -73,15 +133,17 @@ exports.createRoom = async (req, res) => {
       }
     }
 
-    await Seat.bulkCreate(seats);
+    await Seat.bulkCreate(seats, { transaction: t });
+
+    await t.commit();
 
     res.status(201).json({
-      message: "Tạo phòng & ghế thành công",
+      message: "Tạo phòng thành công",
       room,
-      total_seats,
     });
+
   } catch (err) {
-    console.error("CREATE ROOM ERROR:", err);
+    await t.rollback();
     res.status(500).json({ message: "Lỗi server" });
   }
 };

@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     showtime_id: DataTypes.INTEGER,
     seat_id: DataTypes.INTEGER,
+    price: DataTypes.DECIMAL(10, 2),
     hold_at: {
       type: DataTypes.DATE,
       allowNull: true,

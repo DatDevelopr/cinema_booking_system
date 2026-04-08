@@ -7,8 +7,11 @@ const { verifyToken } = require("../middlewares/auth.middleware");
 /**
  * USER + ADMIN
  */
-router.get("/", genreController.getAllGenres);
+router.get("/all", genreController.getAllGenres);
 router.get("/:id", genreController.getGenreById);
+router.get("/", genreController.get10Genres);
+
+
 
 /**
  * ADMIN

@@ -7,10 +7,11 @@ const { isAdmin } = require("../middlewares/role.middleware");
 
 // Public
 router.get("/", regionController.getAllRegions);
+router.get("/get-all", regionController.getAllRegions2);
 
 // Admin
-router.post("/", verifyToken, isAdmin, regionController.createRegion);
-router.put("/:id", verifyToken, isAdmin, regionController.updateRegion);
-router.delete("/:id", verifyToken, isAdmin, regionController.deleteRegion);
+router.post("/", verifyToken, regionController.createRegion);
+router.put("/:id", verifyToken, regionController.updateRegion);
+router.delete("/:id", verifyToken, regionController.deleteRegion);
 
 module.exports = router;

@@ -193,7 +193,7 @@ exports.login = async (req, res) => {
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: false, // production → true
+      secure: false,
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -229,7 +229,6 @@ exports.refreshToken = async (req, res) => {
       return res.status(401).json({ message: "No refresh token" });
     }
 
-    // Verify refresh token
     const decoded = jwt.verify(
       refreshToken,
       process.env.REFRESH_TOKEN_SECRET
@@ -241,11 +240,9 @@ exports.refreshToken = async (req, res) => {
       return res.status(401).json({ message: "User not found" });
     }
 
-    // Tạo access token mới
     const accessToken = generateAccessToken(user);
 
-    // ⭐ Trả user giống login
-    res.json({
+    res.json({ 
       accessToken,
       user: {
         user_id: user.user_id,
@@ -257,11 +254,11 @@ exports.refreshToken = async (req, res) => {
         date_of_birth: user.date_of_birth,
         role_id: user.role_id,
       },
-    });
+     });
 
   } catch (error) {
     console.error("REFRESH TOKEN ERROR:", error);
-    return res.status(403).json({ message: "Invalid refresh token" });
+    return res.status(401).json({ message: "Invalid refresh token" });
   }
 };
 

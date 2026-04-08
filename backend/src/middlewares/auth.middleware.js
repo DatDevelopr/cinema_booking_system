@@ -4,42 +4,27 @@ exports.verifyToken = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
-    /* ❌ Không có Authorization */
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        message: "Unauthorized",
-      });
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    /* ⭐ Lấy token */
     const token = authHeader.split(" ")[1];
 
-    /* ⭐ Verify access token */
-    const decoded = jwt.verify(
-      token,
-      process.env.ACCESS_TOKEN_SECRET
-    );
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    console.log("VERIFY TOKEN:", decoded);
 
-    /* ⭐ Gắn user vào request */
+    // Sửa ở đây: dùng key thực tế trong payload
     req.user = {
-      user_id: decoded.user_id,
-      role_id: decoded.role_id,
+      user_id: decoded.id,       // ← sửa thành decoded.id
+      role_id: decoded.role,     // ← sửa thành decoded.role (hoặc decoded.role_id nếu bạn đổi sau này)
     };
 
     next();
 
   } catch (error) {
-
-    /* ❌ Token hết hạn */
     if (error.name === "TokenExpiredError") {
-      return res.status(401).json({
-        message: "Access token expired",
-      });
+      return res.status(401).json({ message: "Access token expired" });
     }
-
-    /* ❌ Token sai */
-    return res.status(401).json({
-      message: "Invalid token",
-    });
+    return res.status(401).json({ message: "Invalid token" });
   }
 };

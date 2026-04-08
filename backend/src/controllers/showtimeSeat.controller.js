@@ -1,14 +1,9 @@
 const { Showtime, ShowtimeSeat, Seat, Room } = require("../models");
 
-/**
- * GET /api/showtimes/:showtimeId/seats
- * Lấy sơ đồ ghế theo suất chiếu
- */
 exports.getSeatMapByShowtime = async (req, res) => {
   try {
     const { showtimeId } = req.params;
 
-    // 1️⃣ Kiểm tra showtime tồn tại
     const showtime = await Showtime.findByPk(showtimeId, {
       include: {
         model: Room,
@@ -17,10 +12,9 @@ exports.getSeatMapByShowtime = async (req, res) => {
     });
 
     if (!showtime) {
-      return res.status(404).json({ message: "Suất chiếu không tồn tại" });
+      return res.status(404).json({ message: "Không tồn tại" });
     }
 
-    // 2️⃣ Lấy showtime_seats + seat info
     const seats = await ShowtimeSeat.findAll({
       where: { showtime_id: showtimeId },
       include: {
@@ -33,12 +27,12 @@ exports.getSeatMapByShowtime = async (req, res) => {
       ]
     });
 
-    // 3️⃣ Format dữ liệu cho FE
     const seatMap = seats.map(item => ({
       seat_id: item.seat_id,
-      seat_row: item.Seat.seat_row,
-      seat_number: item.Seat.seat_number,
-      seat_type: item.Seat.seat_type,
+      row: item.Seat.seat_row,
+      number: item.Seat.seat_number,
+      type: item.Seat.seat_type,
+      price: item.price,          // ✅ FIX
       status: item.status
     }));
 
@@ -48,8 +42,8 @@ exports.getSeatMapByShowtime = async (req, res) => {
       seats: seatMap
     });
 
-  } catch (error) {
-    console.error("GET SEAT MAP ERROR:", error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };

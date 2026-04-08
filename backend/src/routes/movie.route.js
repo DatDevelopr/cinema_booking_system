@@ -3,7 +3,6 @@ const router = express.Router();
 
 const movieController = require("../controllers/movie.controller");
 const { verifyToken } = require("../middlewares/auth.middleware");
-const { isAdmin, isUser, isRole } = require("../middlewares/role.middleware");
 
 /**
  * USER + ADMIN
@@ -17,22 +16,25 @@ router.get("/:id", movieController.getMovieById);
 router.post(
   "/",
   verifyToken,
-  isAdmin,
   movieController.createMovie
 );
 
 router.put(
   "/:id",
   verifyToken,
-  isAdmin,
   movieController.updateMovie
 );
 
 router.delete(
   "/:id",
   verifyToken,
-  isAdmin,
   movieController.deleteMovie
+);
+
+router.post(
+  "/:id/toggle-status",
+  verifyToken,
+  movieController.toggleStatus
 );
 
 module.exports = router;

@@ -149,22 +149,69 @@ exports.updateUser = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
+
+    if (!req.user || !req.user.user_id) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
     const userId = req.user.user_id;
 
     const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User không tồn tại",
+      });
+    }
+
+    const updateData = {};
+
+    if (req.body.full_name !== undefined)
+      updateData.full_name = req.body.full_name;
+
+    if (req.body.phone !== undefined)
+      updateData.phone = req.body.phone;
+
+    if (req.body.gender !== undefined)
+      updateData.gender = req.body.gender;
+
+    if (req.body.date_of_birth !== undefined)
+      updateData.date_of_birth = req.body.date_of_birth;
+
+    await user.update(updateData);
+
+    return res.json({
+      message: "Cập nhật thành công",
+      user,
+    });
+
+  } catch (err) {
+    console.error("UPDATE PROFILE ERROR:", err);
+
+    return res.status(500).json({
+      message: "Lỗi server",
+    });
+  }
+};
+
+exports.updateAvatar = async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    const { avatar } = req.body;
+    console.log("Updating avatar for user:", userId, "with avatar URL:", avatar);
+
+    const user = await User.findByPk(userId);
+    console.log("User found:", user);
+
     if (!user)
       return res.status(404).json({ message: "User không tồn tại" });
 
-    await user.update({
-      full_name: req.body.full_name,
-      phone: req.body.phone,
-      gender: req.body.gender,
-      date_of_birth: req.body.date_of_birth,
-      avatar: req.file?.filename || user.avatar,
-    });
+    await user.update({ avatar });
 
     res.json({
-      message: "Cập nhật thành công",
+      message: "Cập nhật avatar thành công",
       user,
     });
 
