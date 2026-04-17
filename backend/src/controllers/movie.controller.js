@@ -1,4 +1,4 @@
-const { Movie, Genre, sequelize } = require("../models");
+const { Movie, Genre, sequelize, Room, Showtime } = require("../models");
 const { Op } = require("sequelize");
 
 /* ================= HELPER ================= */
@@ -13,9 +13,115 @@ const generateSlug = (text) => {
     .replace(/\s+/g, "-");
 };
 
-/* =====================================================
-   USER + ADMIN - LẤY DANH SÁCH PHIM (PAGINATION + SORT + SEARCH)
-===================================================== */
+exports.getMovieAndShowtimeBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { cinema_id } = req.query; // 👈 nhận từ FE
+
+    const movie = await Movie.findOne({
+      where: { slug },
+      include: [
+        {
+          model: Genre,
+          through: { attributes: [] },
+        },
+        {
+          model: Showtime,
+          required: false, // ✅ vẫn trả movie nếu không có suất
+          where: {
+            status: "UPCOMING",
+            start_time: {
+              [Op.gte]: new Date(),
+            },
+          },
+          include: [
+            {
+              model: Room,
+              required: true,
+              ...(cinema_id && {
+                where: { cinema_id }, // ✅ filter theo rạp
+              }),
+              attributes: ["room_id", "room_name", "cinema_id"],
+            },
+          ],
+          attributes: ["showtime_id", "start_time", "end_time"],
+        },
+      ],
+      order: [
+        [{ model: Showtime }, "start_time", "ASC"], // 👈 sắp xếp giờ chiếu
+      ],
+    });
+
+    if (!movie) {
+      return res.status(404).json({ message: "Phim không tồn tại" });
+    }
+
+    const data = movie.toJSON();
+
+    // ✅ thêm flag cho FE dùng
+    data.hasShowtime = data.Showtimes?.length > 0;
+
+    res.json({ data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+
+exports.getMoviesWithShowtimeByCinema = async (req, res) => {
+  try {
+    const { cinema_id } = req.query;
+
+    const movies = await Movie.findAll({
+      where: {
+        status: 1,
+      },
+      include: [
+        {
+          model: Genre,
+          through: { attributes: [] },
+        },
+        {
+          model: Showtime,
+          required: false,
+          where: {
+            status: "UPCOMING",
+            start_time: {
+              [Op.gte]: new Date(), // ✅ chỉ lấy suất tương lai
+            },
+          },
+          include: [
+            {
+              model: Room,
+              required: true, // ✅ quan trọng
+              ...(cinema_id && {
+                where: { cinema_id }, // chỉ filter khi có cinema_id
+              }),
+              attributes: [],
+            },
+          ],
+          attributes: ["showtime_id"],
+        },
+      ],
+    });
+
+    const result = movies.map((m) => {
+      const movie = m.toJSON();
+
+      return {
+        ...movie,
+        hasShowtime: movie.Showtimes?.length > 0,
+      };
+    });
+
+    res.json({ data: result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 exports.getAllMovies = async (req, res) => {
   try {
     let {

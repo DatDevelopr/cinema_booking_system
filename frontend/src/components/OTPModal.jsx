@@ -3,13 +3,7 @@ import { useEffect, useState } from "react";
 import OTPInput from "./OTPInput";
 import { Mail, Clock, Shield, X, CheckCircle, AlertCircle } from "lucide-react";
 
-export default function OTPModal({
-  email,
-  open,
-  onVerify,
-  onResend,
-  onClose,
-}) {
+export default function OTPModal({ email, open, onVerify, onResend, onClose }) {
   const [otp, setOtp] = useState("");
   const [countdown, setCountdown] = useState(60);
   const [loading, setLoading] = useState(false);
@@ -37,13 +31,6 @@ export default function OTPModal({
     return () => clearInterval(timer);
   }, [open, countdown]);
 
-  /* ===== AUTO VERIFY ===== */
-  useEffect(() => {
-    if (otp.length === 6 && !loading) {
-      handleVerify();
-    }
-  }, [otp]);
-
   if (!open) return null;
 
   /* ===== VERIFY ===== */
@@ -69,7 +56,7 @@ export default function OTPModal({
   /* ===== RESEND ===== */
   const handleResend = async () => {
     if (countdown > 0) return;
-    
+
     try {
       setResendLoading(true);
       setError("");
@@ -85,7 +72,6 @@ export default function OTPModal({
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
       <div className="bg-white rounded-2xl w-[420px] max-w-[90%] shadow-2xl animate-slideUp overflow-hidden">
-        
         {/* Header with gradient */}
         <div className="bg-gradient-to-r from-[#fc8905] to-[#fda43a] p-5 relative">
           <button
@@ -94,13 +80,15 @@ export default function OTPModal({
           >
             <X size={20} />
           </button>
-          
+
           <div className="flex flex-col items-center">
             <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center mb-3 backdrop-blur-sm">
               <Shield size={28} className="text-white" />
             </div>
             <h3 className="text-xl font-bold text-white">Xác thực OTP</h3>
-            <p className="text-orange-100 text-sm mt-1">Nhập mã xác thực để tiếp tục</p>
+            <p className="text-orange-100 text-sm mt-1">
+              Nhập mã xác thực để tiếp tục
+            </p>
           </div>
         </div>
 
@@ -162,9 +150,25 @@ export default function OTPModal({
           >
             {loading ? (
               <>
-                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  className="animate-spin h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
                 Đang xác thực...
               </>
@@ -183,7 +187,13 @@ export default function OTPModal({
             {countdown > 0 ? (
               <div className="flex items-center justify-center gap-2 text-gray-400">
                 <Clock size={14} />
-                <span className="text-sm">Gửi lại sau <span className="font-semibold text-[#fc8905]">{countdown}</span> giây</span>
+                <span className="text-sm">
+                  Gửi lại sau{" "}
+                  <span className="font-semibold text-[#fc8905]">
+                    {countdown}
+                  </span>{" "}
+                  giây
+                </span>
               </div>
             ) : (
               <button
@@ -199,9 +209,25 @@ export default function OTPModal({
               >
                 {resendLoading ? (
                   <>
-                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg
+                      className="animate-spin h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     Đang gửi...
                   </>

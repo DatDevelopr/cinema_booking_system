@@ -12,3 +12,4 @@ export const genreApi = {
     return res.data.data; 
   },
 };
+export default genreApi;

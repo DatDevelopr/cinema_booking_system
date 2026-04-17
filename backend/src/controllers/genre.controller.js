@@ -4,7 +4,6 @@ const { Genre } = require("../models");
 exports.getAllGenres = async (req, res) => {
   try {
     const genres = await Genre.findAll();
-    console.log("ALL GENRES:", genres);
 
     return res.json({
       data: genres,

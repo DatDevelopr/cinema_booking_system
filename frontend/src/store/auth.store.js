@@ -16,10 +16,11 @@ export const useAuthStore = create(
 
       login: (data) =>
         set({
-          accessToken: data.access_token,   // giữ nguyên key access_token như bạn đang dùng
+          accessToken: data.access_token,
           user: data.user,
           isAuthLoading: false,
         }),
+      
 
       logout: () =>
         set({

@@ -13,6 +13,7 @@ import {
   DoorOpen,
   CalendarClock,
   Ticket,
+  Utensils,
 } from "lucide-react";
 
 /* ========================= */
@@ -205,6 +206,23 @@ const Sidebar = () => {
               Danh sách khu vực
             </MenuItem>
           </MenuGroup>
+
+          {/* SERVICES */}
+          <MenuGroup
+            title="Quản lý dịch vụ"
+            icon={Utensils}
+            isOpen={openMenu === "services" || isActiveGroup("/admin/services")}
+            onToggle={() =>
+              setOpenMenu(openMenu === "services" ? null : "services")
+            }
+          >
+            <MenuItem to="/admin/services" end onClick={closeMobile}>
+              Danh sách dịch vụ
+            </MenuItem>
+            <MenuItem to="/admin/services/create" end onClick={closeMobile}>
+              Tạo dịch vụ
+            </MenuItem>
+          </MenuGroup>
           {/* CINEMAS */}
           <MenuGroup
             title="Quản lý rạp"
@@ -252,10 +270,6 @@ const Sidebar = () => {
           >
             <MenuItem to="/admin/showtimes" end onClick={closeMobile}>
               Danh sách suất chiếu
-            </MenuItem>
-
-            <MenuItem to="/admin/showtimes/create" onClick={closeMobile}>
-              Tạo suất chiếu
             </MenuItem>
           </MenuGroup>
 

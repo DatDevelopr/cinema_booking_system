@@ -6,6 +6,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import { useDropzone } from "react-dropzone";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import useToast from "../../../hooks/useToastSimple";
 import {
   ArrowLeft,
   Building2,
@@ -19,7 +20,9 @@ import {
   Navigation,
   CheckCircle,
   AlertCircle,
-  Globe
+  Globe,
+  Loader2,
+  ChevronDown
 } from "lucide-react";
 
 const center = [21.0285, 105.8542];
@@ -84,12 +87,14 @@ const LocationMarker = ({ setForm, setMarkerPosition }) => {
 };
 
 const CreateCinema = () => {
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [regions, setRegions] = useState([]);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [markerPosition, setMarkerPosition] = useState(null);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -110,10 +115,14 @@ const CreateCinema = () => {
 
   const fetchRegions = async () => {
     try {
+      setFetching(true);
       const res = await cinemaApi.getRegions();
       setRegions(res.data || res || []);
     } catch (err) {
       console.error(err);
+      toast.error("Không thể tải danh sách khu vực");
+    } finally {
+      setFetching(false);
     }
   };
 
@@ -165,12 +174,12 @@ const CreateCinema = () => {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Vui lòng chọn file ảnh");
+      toast.warning("Vui lòng chọn file ảnh");
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("Ảnh phải nhỏ hơn 5MB");
+      toast.warning("Ảnh phải nhỏ hơn 5MB");
       return;
     }
 
@@ -180,8 +189,9 @@ const CreateCinema = () => {
       setUploading(true);
       const res = await UploadApi.uploadFile(file);
       setForm((prev) => ({ ...prev, image: res.url }));
+      toast.success("Tải ảnh lên thành công");
     } catch {
-      alert("Upload thất bại");
+      toast.error("Upload thất bại");
       setPreview(null);
     } finally {
       setUploading(false);
@@ -191,6 +201,7 @@ const CreateCinema = () => {
   const removeImage = () => {
     setPreview(null);
     setForm(prev => ({ ...prev, image: "" }));
+    toast.info("Đã xóa ảnh");
   };
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -219,21 +230,35 @@ const CreateCinema = () => {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert("Vui lòng kiểm tra lại thông tin");
+      toast.warning("Vui lòng kiểm tra lại thông tin");
       return;
     }
 
     try {
       setLoading(true);
       await cinemaApi.create(form);
-      alert("Tạo rạp thành công! 🎉");
-      navigate("/admin/cinemas");
+      toast.success("Tạo rạp thành công");
+      setTimeout(() => {
+        navigate("/admin/cinemas");
+      }, 1500);
     } catch (err) {
-      alert(err?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
+      console.error(err);
+      toast.error(err?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
     } finally {
       setLoading(false);
     }
   };
+
+  if (fetching) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 size={48} className="animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-500">Đang tải danh sách khu vực...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -329,11 +354,7 @@ const CreateCinema = () => {
                           </option>
                         ))}
                       </select>
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
+                      <ChevronDown size={16} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
                     {errors.region_id && touched.region_id && (
                       <p className="text-red-500 text-xs flex items-center gap-1">
@@ -440,7 +461,7 @@ const CreateCinema = () => {
                   </div>
                   {uploading && (
                     <div className="mt-3 flex items-center justify-center gap-2 text-blue-600">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
+                      <Loader2 size={16} className="animate-spin" />
                       <span className="text-sm">Đang tải lên...</span>
                     </div>
                   )}
@@ -517,7 +538,7 @@ const CreateCinema = () => {
                   >
                     {loading ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        <Loader2 size={18} className="animate-spin" />
                         Đang xử lý...
                       </>
                     ) : (
@@ -542,6 +563,23 @@ const CreateCinema = () => {
           </div>
         </form>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

@@ -27,7 +27,8 @@ app.use("/api/showtimes", require("./routes/showtime.route"));
 app.use("/api/payments", require("./routes/payment.route"));
 app.use("/api/otp", require("./routes/otp.route"));
 app.use("/api/upload", require("./routes/upload.route"));
-
-
+app.use("/api/seats", require("./routes/seat.route"));
+app.use("/api/services", require("./routes/services.route"));
+app.use("/api/tickets", require("./routes/ticket.router"));
 
 module.exports = app;

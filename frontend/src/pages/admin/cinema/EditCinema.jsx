@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import useToast from "../../../hooks/useToastSimple";
 import {
   ArrowLeft,
   Building2,
@@ -20,7 +21,8 @@ import {
   Globe,
   Trash2,
   Loader2,
-  CheckCircle
+  CheckCircle,
+  ChevronDown
 } from "lucide-react";
 
 const center = [21.0285, 105.8542];
@@ -60,6 +62,7 @@ const LocationMarker = ({ form, setForm }) => {
 };
 
 const EditCinema = () => {
+  const toast = useToast();
   const navigate = useNavigate();
   const { id } = useParams();
 
@@ -68,7 +71,7 @@ const EditCinema = () => {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [success, setSuccess] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
@@ -85,6 +88,7 @@ const EditCinema = () => {
   useEffect(() => {
     fetchRegions();
     fetchCinema();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchRegions = async () => {
@@ -93,6 +97,7 @@ const EditCinema = () => {
       setRegions(res.data || res || []);
     } catch (err) {
       console.error(err);
+      toast.error("Không thể tải danh sách khu vực");
     }
   };
 
@@ -105,7 +110,7 @@ const EditCinema = () => {
       setPreview(cinema.image);
     } catch (err) {
       console.error(err);
-      alert("Không thể tải thông tin rạp");
+      toast.error("Không thể tải thông tin rạp");
       navigate("/admin/cinemas");
     } finally {
       setFetching(false);
@@ -154,12 +159,12 @@ const EditCinema = () => {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Vui lòng chọn file ảnh");
+      toast.warning("Vui lòng chọn file ảnh");
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("Ảnh phải nhỏ hơn 5MB");
+      toast.warning("Ảnh phải nhỏ hơn 5MB");
       return;
     }
 
@@ -169,8 +174,9 @@ const EditCinema = () => {
       setUploading(true);
       const res = await UploadApi.uploadFile(file);
       setForm((prev) => ({ ...prev, image: res.url }));
+      toast.success("Tải ảnh lên thành công");
     } catch {
-      alert("Upload ảnh thất bại");
+      toast.error("Upload ảnh thất bại");
       setPreview(form.image);
     } finally {
       setUploading(false);
@@ -180,6 +186,7 @@ const EditCinema = () => {
   const removeImage = () => {
     setPreview(null);
     setForm(prev => ({ ...prev, image: "" }));
+    toast.info("Đã xóa ảnh");
   };
 
   /* ================= SUBMIT ================= */
@@ -202,19 +209,22 @@ const EditCinema = () => {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert("Vui lòng kiểm tra lại thông tin");
+      toast.warning("Vui lòng kiểm tra lại thông tin");
       return;
     }
 
     try {
       setLoading(true);
       await cinemaApi.update(id, form);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-      alert("Cập nhật rạp thành công! 🎉");
-      navigate("/admin/cinemas");
+      setSaveSuccess(true);
+      toast.success("Cập nhật rạp thành công");
+      setTimeout(() => {
+        setSaveSuccess(false);
+        navigate("/admin/cinemas");
+      }, 1500);
     } catch (error) {
-      alert(error?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
+      console.error(error);
+      toast.error(error?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -227,10 +237,13 @@ const EditCinema = () => {
 
     try {
       await cinemaApi.delete(id);
-      alert("Xóa rạp thành công!");
-      navigate("/admin/cinemas");
+      toast.success("Xóa rạp thành công!");
+      setTimeout(() => {
+        navigate("/admin/cinemas");
+      }, 1500);
     } catch (error) {
-      alert(error?.response?.data?.message || "Không thể xóa rạp. Vui lòng kiểm tra lại.");
+      console.error(error);
+      toast.error(error?.response?.data?.message || "Không thể xóa rạp. Vui lòng kiểm tra lại.");
     }
   };
 
@@ -339,11 +352,7 @@ const EditCinema = () => {
                           </option>
                         ))}
                       </select>
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
+                      <ChevronDown size={16} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
                     {errors.region_id && touched.region_id && (
                       <p className="text-red-500 text-xs flex items-center gap-1">
@@ -461,7 +470,7 @@ const EditCinema = () => {
                   )}
                   {uploading && (
                     <div className="mt-3 flex items-center justify-center gap-2 text-blue-600">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
+                      <Loader2 size={16} className="animate-spin" />
                       <span className="text-sm">Đang tải lên...</span>
                     </div>
                   )}
@@ -541,7 +550,7 @@ const EditCinema = () => {
                         <Loader2 size={18} className="animate-spin" />
                         Đang lưu...
                       </>
-                    ) : success ? (
+                    ) : saveSuccess ? (
                       <>
                         <CheckCircle size={18} />
                         Đã lưu
@@ -593,6 +602,23 @@ const EditCinema = () => {
           </div>
         </form>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

@@ -2,6 +2,17 @@ import axiosClient from "./axiosClient";
 
 export const movieApi = {
   /* ================= GET ALL ================= */
+  getAllForUser: (params) => {
+    return axiosClient.get("/movies/user", {
+      params,
+    });
+  },
+  getBySlug: (slug, cinemaId) => {
+    return axiosClient.get(`/movies/movie-showtimes/${slug}`, {
+      params: { cinema_id: cinemaId },
+    });
+  },
+
   getAll: (params) => {
     return axiosClient.get("/movies", {
       params,
@@ -33,3 +44,5 @@ export const movieApi = {
     return axiosClient.post(`/movies/${id}/toggle-status`);
   },
 };
+
+export default movieApi;

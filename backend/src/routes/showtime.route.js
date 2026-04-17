@@ -1,6 +1,5 @@
 const router = require("express").Router();
 const showtimeController = require("../controllers/showtime.controller");
-const showtimeSeatController = require("../controllers/showtimeSeat.controller");
 const { verifyToken } = require("../middlewares");
 
 /* ================= PUBLIC ================= */
@@ -10,7 +9,7 @@ router.get("/by-cinema", showtimeController.getShowtimesByCinema);
 
 
 // Lấy sơ đồ ghế
-router.get("/:id/seats", showtimeSeatController.getSeatMapByShowtime);
+router.get("/:id/seats", showtimeController.getSeatMapByShowtime);
 
 // Lấy chi tiết
 router.get("/:id", showtimeController.getShowtimeDetail);
@@ -32,5 +31,9 @@ router.delete("/:id", verifyToken, showtimeController.deleteShowtime);
 
 // Toggle trạng thái
 router.patch("/:id/status", verifyToken, showtimeController.deleteShowtime);
+
+
+router.post("/hold", showtimeController.holdSeats);
+router.post("/release", showtimeController.releaseSeats);
 
 module.exports = router;

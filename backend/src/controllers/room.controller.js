@@ -185,3 +185,31 @@ exports.deleteRoom = async (req, res) => {
     res.status(500).json({ message: "Lỗi server" });
   }
 };
+/**
+ * GET ROOM BY ID
+ */
+exports.getRoomById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const room = await Room.findByPk(id, {
+      include: [
+        {
+          model: Cinema,
+          attributes: ["cinema_id", "cinema_name"],
+        },
+      ],
+    });
+
+    if (!room) {
+      return res.status(404).json({
+        message: "Phòng không tồn tại",
+      });
+    }
+
+    res.json(room);
+  } catch (err) {
+    console.error("GET ROOM BY ID ERROR:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};

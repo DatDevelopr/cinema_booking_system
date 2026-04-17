@@ -35,7 +35,7 @@ export const showtimeApi = {
   },
 
   // Huỷ suất chiếu (soft delete)
-  remove: (id) => {
+  deleteShowtime: (id) => {
     return axiosClient.delete(`/showtimes/${id}`);
   },
 
@@ -43,6 +43,21 @@ export const showtimeApi = {
   toggleStatus: (id) => {
     return axiosClient.patch(`/showtimes/${id}/status`);
   },
+
+  // lấy sơ đồ ghế
+  getSeatMap: (id) => {
+    return axiosClient.get(`/showtimes/${id}/seats`);
+  },
+
+  // Giữ ghế
+  holdSeats: (data) => {
+    return axiosClient.post("/showtimes/hold", data);
+  },
+
+  // Release ghế
+  releaseSeats: (data) => {
+    return axiosClient.post("/showtimes/release", data);
+  }
 };
 
 export default showtimeApi;

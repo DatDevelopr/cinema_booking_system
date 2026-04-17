@@ -24,4 +24,4 @@ export const regionApi = {
   // ===============================
   remove: (id) => axiosClient.delete(`/regions/${id}`),
 };
-
+export default regionApi;

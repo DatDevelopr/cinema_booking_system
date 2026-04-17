@@ -17,6 +17,10 @@ module.exports = {
         socket.join(`showtime_${showtimeId}`);
       });
 
+      socket.on("leave_showtime", (showtimeId) => {
+        socket.leave(`showtime_${showtimeId}`);
+      });
+
       socket.on("disconnect", () => {
         console.log("❌ Client disconnected:", socket.id);
       });
@@ -28,5 +32,11 @@ module.exports = {
   getIO: () => {
     if (!io) throw new Error("Socket.io not initialized");
     return io;
+  },
+
+  // ✅ THÊM CÁI NÀY
+  emitSeatUpdate: (showtimeId, data) => {
+    if (!io) return;
+    io.to(`showtime_${showtimeId}`).emit("seat_update", data);
   },
 };

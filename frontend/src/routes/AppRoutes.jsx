@@ -16,7 +16,8 @@ import TicketPage from "../pages/client/profile/pages/TicketPage";
 import HistoryPage from "../pages/client/profile/pages/HistoryPage";
 import ForgotPassword from "../pages/client/auth/ForgotPassword";
 import ResetPassword from "../pages/client/auth/ResetPassword";
-
+import MovieDetail from "../pages/client/home/components/MovieDetail";
+import BookingPage from "../pages/client/booking/BookingPage";
 
 import Dashboard from "../pages/admin/dashboard/Dashboard";
 import Overview from "../pages/admin/Overview";
@@ -35,15 +36,37 @@ import MovieManagement from "../pages/admin/movie/MovieManagement";
 import CreateMovie from "../pages/admin/movie/CreateMovie";
 import EditMovie from "../pages/admin/movie/EditMovie";
 import ShowtimeManagement from "../pages/admin/showtime/ShowtimeManagement";
+import CreateShowtime from "../pages/admin/showtime/CreateShowTimes";
+import EditShowtime from "../pages/admin/showtime/EditShowtimes";
+import SeatEditor from "../pages/admin/room/EditSeat";
+import ServicesManagement from "../pages/admin/services/ServicesManagement";
+import CreateService from "../pages/admin/services/CreateService";
+import EditService from "../pages/admin/services/EditService";
 
 const AppRoutes = () => {
   return (
     <Routes>
       {/* USER SITE */}
       <Route element={<UserLayout />}>
-        <Route path="/" element={<ProtectedUser><HomePage /></ProtectedUser>} />
+        <Route
+          path="/"
+          element={
+            <ProtectedUser>
+              <HomePage />
+            </ProtectedUser>
+          }
+        />
         <Route path="/movies" element={<MoviePage />} />
+        <Route path="/movies/:idSlug" element={<MovieDetail />} />
         <Route path="/showtimes" element={<ShowtimePage />} />
+        <Route
+          path="/booking/:showtime_id"
+          element={
+            <ProtectedRoute>
+              <BookingPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/auth"
           element={
@@ -87,25 +110,31 @@ const AppRoutes = () => {
         </Route>
         <Route path="genres" element={<GenreManagement />} />
         <Route path="regions" element={<RegionManagement />} />
-        <Route path="cinemas" >
+        <Route path="cinemas">
           <Route index element={<CinemaManagement />} />
           <Route path="create" element={<CreateCinema />} />
           <Route path=":id/edit" element={<EditCinema />} />
         </Route>
-        <Route path="rooms" >
+        <Route path="rooms">
           <Route index element={<RoomManagement />} />
           <Route path="create" element={<CreateRoom />} />
           <Route path=":id/edit" element={<EditRoom />} />
+          <Route path=":id/seats" element={<SeatEditor />} />
         </Route>
         <Route path="movies">
           <Route index element={<MovieManagement />} />
           <Route path="create" element={<CreateMovie />} />
           <Route path=":id/edit" element={<EditMovie />} />
         </Route>
-        <Route path="showtimes" >
+        <Route path="showtimes">
           <Route index element={<ShowtimeManagement />} />
-          {/* <Route path="create" element={<CreateShowtime />} /> */}
-          {/* <Route path=":id/edit" element={<EditShowtime />} /> */}
+          <Route path="create" element={<CreateShowtime />} />
+          <Route path=":id/edit" element={<EditShowtime />} />
+        </Route>
+        <Route path="services">
+          <Route index element={<ServicesManagement />} />
+          <Route path="create" element={<CreateService />} />
+          <Route path=":id/edit" element={<EditService />} />
         </Route>
       </Route>
     </Routes>

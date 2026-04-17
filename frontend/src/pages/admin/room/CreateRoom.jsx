@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { roomApi } from "../../../api/room.api";
 import { cinemaApi } from "../../../api/cinema.api";
+import useToast from "../../../hooks/useToastSimple";
 import {
   ArrowLeft,
+  ChevronDown,
   Building2,
   Armchair,
   LayoutGrid,
@@ -14,14 +16,18 @@ import {
   Monitor,
   Info,
   AlertCircle,
-  TrendingUp
+  TrendingUp,
+  CheckCircle,
+  Loader2
 } from "lucide-react";
 
 const CreateRoom = () => {
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [cinemas, setCinemas] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
 
   const [form, setForm] = useState({
     cinema_id: "",
@@ -37,13 +43,18 @@ const CreateRoom = () => {
   useEffect(() => {
     const fetchCinemas = async () => {
       try {
+        setFetching(true);
         const res = await cinemaApi.getAll({ limit: 1000 });
         setCinemas(res.data?.data || res.data || []);
       } catch (err) {
         console.error(err);
+        toast.error("Không thể tải danh sách rạp");
+      } finally {
+        setFetching(false);
       }
     };
     fetchCinemas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ================= HANDLE ================= */
@@ -114,7 +125,10 @@ const CreateRoom = () => {
 
   /* ================= SUBMIT ================= */
   const handleSubmit = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      toast.warning("Vui lòng kiểm tra lại thông tin");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -123,10 +137,13 @@ const CreateRoom = () => {
         rows: Number(form.rows),
         seats_per_row: Number(form.seats_per_row),
       });
-      alert("Tạo phòng thành công");
-      navigate("/admin/rooms");
+      toast.success("Tạo phòng thành công");
+      setTimeout(() => {
+        navigate("/admin/rooms");
+      }, 1500);
     } catch (err) {
-      alert(err?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
+      console.error(err);
+      toast.error(err?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -196,6 +213,17 @@ const CreateRoom = () => {
 
   const totalSeats = form.rows * form.seats_per_row;
 
+  if (fetching) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 size={48} className="animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-500">Đang tải danh sách rạp...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -236,7 +264,7 @@ const CreateRoom = () => {
               >
                 {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <Loader2 size={18} className="animate-spin" />
                     Đang tạo...
                   </>
                 ) : (
@@ -270,7 +298,7 @@ const CreateRoom = () => {
                     Rạp chiếu <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    {/* <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} /> */}
+                    <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                     <select
                       name="cinema_id"
                       value={form.cinema_id}
@@ -290,9 +318,7 @@ const CreateRoom = () => {
                       ))}
                     </select>
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
+                      <ChevronDown size={16} className="text-gray-400" />
                     </div>
                   </div>
                   {errors.cinema_id && touched.cinema_id && (
@@ -460,6 +486,23 @@ const CreateRoom = () => {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

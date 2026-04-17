@@ -13,7 +13,7 @@ export const useAuthInit = () => {
 
         // ⭐ Login lại bằng refresh token
         login({
-          accessToken: res.data.accessToken,
+          access_token: res.data.accessToken,
           user: res.data.user,
         });
 

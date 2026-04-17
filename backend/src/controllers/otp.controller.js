@@ -51,22 +51,28 @@ exports.verifyOTP = async (req, res) => {
 
     const record = await Otp.findOne({ where: { email } });
 
-    console.log("TYPE input OTP:", typeof otp);
-    console.log("TYPE db OTP:", typeof record?.otp);
-
-    console.log("INPUT OTP:", `[${otp}]`, otp.length);
-    console.log("DB OTP:", `[${record?.otp}]`, String(record?.otp).length);
+    // ❗ 1. Không tồn tại
+    if (!record) {
+      return res.status(400).json({ message: "OTP không tồn tại" });
+    }
 
     const inputOtp = String(otp).trim();
     const dbOtp = String(record.otp).trim();
 
-    console.log("COMPARE:", inputOtp === dbOtp);
-
+    // ❗ 2. Sai OTP
     if (inputOtp !== dbOtp) {
       return res.status(400).json({ message: "OTP không hợp lệ" });
     }
 
-    res.json({ message: "OTP hợp lệ" });
+    // ❗ 3. Hết hạn
+    if (new Date() > new Date(record.expires_at)) {
+      return res.status(400).json({ message: "OTP đã hết hạn" });
+    }
+
+    // ❗ 4. Xoá OTP sau khi dùng (QUAN TRỌNG)
+    await Otp.destroy({ where: { email } });
+
+    return res.json({ message: "OTP hợp lệ" });
 
   } catch (e) {
     console.error(e);

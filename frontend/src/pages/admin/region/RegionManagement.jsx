@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { regionApi } from "../../../api/region.api";
+import useToast from "../../../hooks/useToastSimple";
+import RegionModal from "./RegionModal";
 import { 
-  Pencil, 
+  Pencil,
   Plus, 
   X, 
   Check, 
@@ -10,51 +12,68 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-  Layers
+  Layers,
+  Loader2
 } from "lucide-react";
 
 const RegionManagement = () => {
+  const toast = useToast();
   const [regions, setRegions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const inputRef = useRef(null);
 
   // form state
   const [showForm, setShowForm] = useState(false);
   const [editingRegion, setEditingRegion] = useState(null);
   const [regionName, setRegionName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 8;
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   // ===============================
   // GET LIST
   // ===============================
-  const fetchRegions = async () => {
+  const fetchRegions = useCallback(async () => {
     try {
-      setLoading(true);
+      if (isFirstLoad) setLoading(true);
 
       const res = await regionApi.getAllRegion({
         page,
         limit,
-        search: searchTerm,
+        search: debouncedSearch,
       });
 
       setRegions(res.data.data || res.data || []);
       setTotalPages(res.data.pagination?.totalPages || 1);
     } catch (error) {
       console.error("Lỗi lấy danh sách region:", error);
+      toast.error("Không thể tải danh sách khu vực");
       setRegions([]);
     } finally {
       setLoading(false);
+      setIsFirstLoad(false);
     }
-  };
+  }, [page, debouncedSearch, isFirstLoad, toast]);
 
   useEffect(() => {
     fetchRegions();
-  }, [page, searchTerm]);
+  }, [fetchRegions]);
 
   // ===============================
   // TOGGLE STATUS
@@ -73,10 +92,7 @@ const RegionManagement = () => {
 
       const newStatus = region.status === 1 ? 0 : 1;
 
-      await regionApi.update(region.region_id, {
-        status: newStatus,
-      });
-
+      // Optimistic update
       setRegions((prev) =>
         prev.map((item) =>
           item.region_id === region.region_id
@@ -84,74 +100,114 @@ const RegionManagement = () => {
             : item
         )
       );
+
+      await regionApi.update(region.region_id, {
+        status: newStatus,
+      });
+      
+      toast.success(`Đã ${newStatus === 1 ? "kích hoạt" : "ngừng hoạt động"} khu vực "${region.region_name}"`);
     } catch (error) {
-      alert(error?.response?.data?.message || "Có lỗi xảy ra");
+      // Rollback
+      setRegions((prev) =>
+        prev.map((item) =>
+          item.region_id === region.region_id
+            ? { ...item, status: region.status }
+            : item
+        )
+      );
+      toast.error(error?.response?.data?.message || "Có lỗi xảy ra");
     } finally {
       setUpdatingId(null);
     }
   };
 
   // ===============================
-  // OPEN CREATE FORM
+  // OPEN CREATE FORM - Dùng useCallback
   // ===============================
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setEditingRegion(null);
     setRegionName("");
     setShowForm(true);
-  };
+  }, []);
 
   // ===============================
   // OPEN EDIT FORM
   // ===============================
-  const handleEdit = (region) => {
+  const handleEdit = useCallback((region) => {
     setEditingRegion(region);
     setRegionName(region.region_name);
     setShowForm(true);
-  };
+  }, []);
 
   // ===============================
   // CLOSE FORM
   // ===============================
-  const handleCloseForm = () => {
+  const handleCloseForm = useCallback(() => {
     setShowForm(false);
     setEditingRegion(null);
     setRegionName("");
-  };
+    setIsSubmitting(false);
+  }, []);
 
   // ===============================
   // SUBMIT FORM
   // ===============================
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
 
     if (!regionName.trim()) {
-      alert("Tên khu vực không được để trống");
+      toast.warning("Tên khu vực không được để trống");
       return;
     }
 
+    if (isSubmitting) return;
+
     try {
+      setIsSubmitting(true);
+      
       if (editingRegion) {
-        // UPDATE
         await regionApi.update(editingRegion.region_id, {
           region_name: regionName.trim(),
         });
+        toast.success("Cập nhật khu vực thành công!");
+        
+        // Update local state
+        setRegions((prev) =>
+          prev.map((item) =>
+            item.region_id === editingRegion.region_id
+              ? { ...item, region_name: regionName.trim() }
+              : item
+          )
+        );
       } else {
-        // CREATE
-        await regionApi.create({
+        const res = await regionApi.create({
           region_name: regionName.trim(),
           status: 1,
         });
+        
+        const newRegion = res.data || { region_id: Date.now(), region_name: regionName.trim(), status: 1 };
+        setRegions((prev) => [newRegion, ...prev]);
+        
+        toast.success("Tạo khu vực mới thành công!");
       }
 
       handleCloseForm();
-      setPage(1);
-      fetchRegions();
     } catch (error) {
-      alert(error?.response?.data?.message || "Có lỗi xảy ra");
+      toast.error(error?.response?.data?.message || "Có lỗi xảy ra");
+      await fetchRegions(); // Rollback
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }, [regionName, isSubmitting, editingRegion, toast, handleCloseForm, fetchRegions]);
 
-  // Loading Skeleton
+  // Stats
+  const stats = useMemo(() => ({
+    total: regions.length,
+    active: regions.filter(r => r.status === 1).length,
+    inactive: regions.filter(r => r.status === 0).length,
+  }), [regions]);
+
+  // Loading Skeleton - chỉ hiện lần đầu
   const LoadingSkeleton = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -182,12 +238,13 @@ const RegionManagement = () => {
           onClick={() => setSearchTerm("")}
           className="inline-flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-6 py-2.5 rounded-xl font-medium transition-all"
         >
+          <X size={20} />
           Xóa tìm kiếm
         </button>
       ) : (
         <button
           onClick={handleCreate}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium transition-all"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm transition-all duration-200"
         >
           <Plus size={20} />
           Tạo khu vực mới
@@ -198,6 +255,8 @@ const RegionManagement = () => {
 
   // Pagination Component
   const Pagination = () => {
+    if (totalPages <= 1) return null;
+
     const maxVisible = 5;
     let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
@@ -276,68 +335,6 @@ const RegionManagement = () => {
     );
   };
 
-  // Modal Form Component
-  const ModalForm = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 animate-slideUp">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              {editingRegion ? <Pencil size={20} className="text-white" /> : <Plus size={20} className="text-white" />}
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              {editingRegion ? "Chỉnh sửa khu vực" : "Tạo khu vực mới"}
-            </h2>
-          </div>
-          <button
-            onClick={handleCloseForm}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-500" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tên khu vực
-            </label>
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                value={regionName}
-                onChange={(e) => setRegionName(e.target.value)}
-                placeholder="VD: Hồ Chí Minh, Hà Nội, Đà Nẵng..."
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                autoFocus
-              />
-            </div>
-            <p className="mt-2 text-xs text-gray-500">
-              Tên khu vực nên viết hoa chữ cái đầu
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2.5 rounded-xl font-medium transition-all"
-            >
-              {editingRegion ? "Cập nhật" : "Tạo mới"}
-            </button>
-            <button
-              type="button"
-              onClick={handleCloseForm}
-              className="flex-1 border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl font-medium transition-all"
-            >
-              Hủy bỏ
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -346,8 +343,13 @@ const RegionManagement = () => {
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Quản lý khu vực</h1>
-              <p className="text-gray-600">Quản lý các khu vực đặt rạp chiếu phim trên toàn quốc</p>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+                  <Globe size={20} className="text-white" />
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900">Quản lý khu vực</h1>
+              </div>
+              <p className="text-gray-600 ml-13">Quản lý các khu vực đặt rạp chiếu phim trên toàn quốc</p>
             </div>
             
             <button
@@ -366,7 +368,7 @@ const RegionManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Tổng số khu vực</p>
-                <p className="text-2xl font-bold text-gray-900">{regions.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                 <Globe size={20} className="text-blue-600" />
@@ -378,9 +380,7 @@ const RegionManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Đang hoạt động</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {regions.filter(r => r.status === 1).length}
-                </p>
+                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
               </div>
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                 <Check size={20} className="text-green-600" />
@@ -392,9 +392,7 @@ const RegionManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Tạm ngưng</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {regions.filter(r => r.status === 0).length}
-                </p>
+                <p className="text-2xl font-bold text-red-600">{stats.inactive}</p>
               </div>
               <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                 <Layers size={20} className="text-red-600" />
@@ -411,116 +409,113 @@ const RegionManagement = () => {
               type="text"
               placeholder="Tìm kiếm khu vực..."
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Content */}
-        {loading ? (
-          <LoadingSkeleton />
-        ) : regions.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <>
-            {/* Regions Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {regions.map((region, index) => (
-                <div
-                  key={region.region_id}
-                  className="group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300"
-                >
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
-                        <MapPin size={24} className="text-white" />
-                      </div>
-                      
-                      <button
-                        onClick={() => handleToggleStatus(region)}
-                        disabled={updatingId === region.region_id}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                          region.status === 1 ? "bg-green-500" : "bg-gray-300"
-                        } ${updatingId === region.region_id ? "opacity-50 cursor-not-allowed" : ""}`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                            region.status === 1 ? "translate-x-6" : "translate-x-1"
-                          }`}
-                        />
-                      </button>
-                    </div>
+        <div className="relative">
+          {loading && isFirstLoad ? (
+            <LoadingSkeleton />
+          ) : regions.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <>
+              <div className={`transition-opacity duration-200 ${loading ? "opacity-50" : ""}`}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {regions.map((region) => (
+                    <div
+                      key={region.region_id}
+                      className="group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+                            <MapPin size={24} className="text-white" />
+                          </div>
+                          
+                          <button
+                            onClick={() => handleToggleStatus(region)}
+                            disabled={updatingId === region.region_id}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                              region.status === 1 ? "bg-green-500" : "bg-gray-300"
+                            } ${updatingId === region.region_id ? "opacity-50 cursor-not-allowed" : ""}`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                region.status === 1 ? "translate-x-6" : "translate-x-1"
+                              }`}
+                            />
+                          </button>
+                        </div>
 
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                        {region.region_name}
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Khu vực {region.region_name}
-                      </p>
-                    </div>
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {region.region_name}
+                          </h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Khu vực {region.region_name}
+                          </p>
+                        </div>
 
-                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${region.status === 1 ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className={`text-xs font-medium ${region.status === 1 ? 'text-green-600' : 'text-red-600'}`}>
-                          {region.status === 1 ? "Đang hoạt động" : "Tạm ngưng"}
-                        </span>
+                        <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${region.status === 1 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            <span className={`text-xs font-medium ${region.status === 1 ? 'text-green-600' : 'text-red-600'}`}>
+                              {region.status === 1 ? "Đang hoạt động" : "Tạm ngưng"}
+                            </span>
+                          </div>
+                          
+                          <button
+                            onClick={() => handleEdit(region)}
+                            className="opacity-0 group-hover:opacity-100 p-2 hover:bg-gray-100 rounded-lg transition-all"
+                          >
+                            <Pencil size={18} className="text-gray-500" />
+                          </button>
+                        </div>
                       </div>
-                      
-                      <button
-                        onClick={() => handleEdit(region)}
-                        className="opacity-0 group-hover:opacity-100 p-2 hover:bg-gray-100 rounded-lg transition-all"
-                      >
-                        <Pencil size={18} className="text-gray-500" />
-                      </button>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+              
+              {/* Loading overlay */}
+              {loading && !isFirstLoad && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/50 rounded-2xl">
+                  <Loader2 size={32} className="animate-spin text-blue-600" />
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && <Pagination />}
-          </>
-        )}
+        {/* Pagination */}
+        {!loading && regions.length > 0 && <Pagination />}
       </div>
 
-      {/* Modal Form */}
-      {showForm && <ModalForm />}
+      {/* Modal Form - Component riêng biệt */}
+      <RegionModal
+        show={showForm}
+        onClose={handleCloseForm}
+        onSubmit={handleSubmit}
+        editingRegion={editingRegion}
+        regionName={regionName}
+        setRegionName={setRegionName}
+        isSubmitting={isSubmitting}
+        ref={inputRef}
+      />
     </div>
   );
 };
 
 export default RegionManagement;
-
-// Add these styles to your global CSS or tailwind.config.js
-const styles = `
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.2s ease-out;
-}
-
-.animate-slideUp {
-  animation: slideUp 0.3s ease-out;
-}
-`;

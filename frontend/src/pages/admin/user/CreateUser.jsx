@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { userApi } from "../../../api/user.api";
+import useToast from "../../../hooks/useToastSimple";
 import {
   ArrowLeft,
   UserPlus,
@@ -9,7 +10,6 @@ import {
   Lock,
   Phone,
   Calendar,
-  Users,
   Shield,
   Activity,
   Save,
@@ -17,10 +17,12 @@ import {
   CheckCircle,
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Loader2
 } from "lucide-react";
 
 const CreateUser = () => {
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -137,19 +139,21 @@ const CreateUser = () => {
     setTouched(newTouched);
     
     if (!validateForm()) {
-      alert("Vui lòng kiểm tra lại thông tin");
+      toast.warning("Vui lòng kiểm tra lại thông tin");
       return;
     }
 
     try {
       setLoading(true);
       await userApi.createUser(form);
-      alert("Tạo người dùng thành công!");
-      navigate("/admin/users");
+      toast.success("Tạo người dùng thành công");
+      setTimeout(() => {
+        navigate("/admin/users");
+      }, 1500);
     } catch (error) {
       console.error(error);
       const errorMessage = error?.response?.data?.message || "Tạo người dùng thất bại!";
-      alert(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -185,8 +189,11 @@ const CreateUser = () => {
               {/* Basic Information Card */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                  <h2 className="text-lg font-semibold text-gray-900">Thông tin cơ bản</h2>
-                  <p className="text-sm text-gray-500">Các thông tin chính của người dùng</p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
+                    <h2 className="text-lg font-semibold text-gray-900">Thông tin cơ bản</h2>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1 ml-3">Các thông tin chính của người dùng</p>
                 </div>
                 
                 <div className="p-6 space-y-5">
@@ -266,8 +273,11 @@ const CreateUser = () => {
               {/* Role & Status Card */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                  <h2 className="text-lg font-semibold text-gray-900">Phân quyền & Trạng thái</h2>
-                  <p className="text-sm text-gray-500">Cài đặt quyền và trạng thái tài khoản</p>
+                  <div className="flex items-center gap-2">
+                    <Shield size={18} className="text-blue-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">Phân quyền & Trạng thái</h2>
+                  </div>
+                  <p className="text-sm text-gray-500 ml-7">Cài đặt quyền và trạng thái tài khoản</p>
                 </div>
                 
                 <div className="p-6 space-y-4">
@@ -290,8 +300,8 @@ const CreateUser = () => {
                     value={form.status}
                     onChange={handleChange}
                     options={[
-                      { value: 1, label: "Kích hoạt", color: "green" },
-                      { value: 0, label: "Vô hiệu", color: "red" },
+                      { value: 1, label: "Kích hoạt" },
+                      { value: 0, label: "Vô hiệu" },
                     ]}
                   />
                 </div>
@@ -300,8 +310,11 @@ const CreateUser = () => {
               {/* Gender Card */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                  <h2 className="text-lg font-semibold text-gray-900">Thông tin khác</h2>
-                  <p className="text-sm text-gray-500">Giới tính của người dùng</p>
+                  <div className="flex items-center gap-2">
+                    <User size={18} className="text-blue-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">Thông tin khác</h2>
+                  </div>
+                  <p className="text-sm text-gray-500 ml-7">Giới tính của người dùng</p>
                 </div>
                 
                 <div className="p-6">
@@ -311,9 +324,9 @@ const CreateUser = () => {
                     value={form.gender}
                     onChange={handleChange}
                     options={[
-                      { value: "male", label: "Nam", icon: "♂" },
-                      { value: "female", label: "Nữ", icon: "♀" },
-                      { value: "other", label: "Khác", icon: "⚧" },
+                      { value: "male", label: "Nam" },
+                      { value: "female", label: "Nữ" },
+                      { value: "other", label: "Khác" },
                     ]}
                   />
                 </div>
@@ -329,7 +342,7 @@ const CreateUser = () => {
                   >
                     {loading ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        <Loader2 size={18} className="animate-spin" />
                         Đang xử lý...
                       </>
                     ) : (
@@ -410,16 +423,23 @@ const Select = ({ label, icon, options, ...props }) => (
     <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
       {icon} {label}
     </label>
-    <select
-      {...props}
-      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white cursor-pointer"
-    >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <div className="relative">
+      <select
+        {...props}
+        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none bg-white cursor-pointer hover:border-blue-400"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+    </div>
   </div>
 );
 
@@ -437,10 +457,7 @@ const RadioGroup = ({ label, name, value, onChange, options }) => (
             onChange={onChange}
             className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
           />
-          <span className="text-sm text-gray-700">
-            {opt.icon && <span className="mr-1">{opt.icon}</span>}
-            {opt.label}
-          </span>
+          <span className="text-sm text-gray-700">{opt.label}</span>
         </label>
       ))}
     </div>

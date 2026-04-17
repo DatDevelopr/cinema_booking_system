@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { userApi } from "../../../api/user.api";
 import DEFAULT_AVATAR from "../../../assets/images/avatar.jpg";
+import useToast from "../../../hooks/useToastSimple";
 import {
   ArrowLeft,
   Save,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 
 const UpdateUser = () => {
+  const toast = useToast();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -46,7 +48,7 @@ const UpdateUser = () => {
       setForm(res.data.data);
     } catch (error) {
       console.error(error);
-      alert("Không thể tải thông tin người dùng");
+      toast.error("Không thể tải thông tin người dùng");
       navigate("/admin/users");
     } finally {
       setLoading(false);
@@ -143,19 +145,19 @@ const UpdateUser = () => {
     setTouched(newTouched);
     
     if (!validateForm()) {
-      alert("Vui lòng kiểm tra lại thông tin");
+      toast.warning("Vui lòng kiểm tra lại thông tin");
       return;
     }
 
     try {
       setUpdating(true);
       await userApi.updateUser(id, form);
-      alert("Cập nhật thành công!");
+      toast.success("Cập nhật thông tin thành công");
       fetchUser(); // Refresh data
     } catch (error) {
       console.error(error);
       const errorMessage = error?.response?.data?.message || "Cập nhật thất bại!";
-      alert(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setUpdating(false);
     }
@@ -166,10 +168,10 @@ const UpdateUser = () => {
     try {
       setResetting(true);
       await userApi.resetPassword(id);
-      alert("Đã reset mật khẩu thành công! Mật khẩu mới đã được gửi đến email.");
+      toast.success("Reset mật khẩu thành công! Mật khẩu mới đã được gửi đến email.");
     } catch (error) {
       console.error(error);
-      alert("Reset mật khẩu thất bại!");
+      toast.error("Reset mật khẩu thất bại!");
     } finally {
       setResetting(false);
     }
@@ -224,8 +226,11 @@ const UpdateUser = () => {
             {/* Basic Information Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <h2 className="text-lg font-semibold text-gray-900">Thông tin cơ bản</h2>
-                <p className="text-sm text-gray-500">Các thông tin chính của người dùng</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
+                  <h2 className="text-lg font-semibold text-gray-900">Thông tin cơ bản</h2>
+                </div>
+                <p className="text-sm text-gray-500 mt-1 ml-3">Các thông tin chính của người dùng</p>
               </div>
               
               <div className="p-6 space-y-5">
@@ -302,8 +307,11 @@ const UpdateUser = () => {
             {/* Avatar Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <h2 className="text-lg font-semibold text-gray-900">Ảnh đại diện</h2>
-                <p className="text-sm text-gray-500">Hình ảnh của người dùng</p>
+                <div className="flex items-center gap-2">
+                  <Camera size={18} className="text-blue-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Ảnh đại diện</h2>
+                </div>
+                <p className="text-sm text-gray-500 ml-7">Hình ảnh của người dùng</p>
               </div>
               
               <div className="p-6">
@@ -329,8 +337,11 @@ const UpdateUser = () => {
             {/* Role & Status Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <h2 className="text-lg font-semibold text-gray-900">Phân quyền & Trạng thái</h2>
-                <p className="text-sm text-gray-500">Cài đặt quyền và trạng thái tài khoản</p>
+                <div className="flex items-center gap-2">
+                  <Shield size={18} className="text-blue-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Phân quyền & Trạng thái</h2>
+                </div>
+                <p className="text-sm text-gray-500 ml-7">Cài đặt quyền và trạng thái tài khoản</p>
               </div>
               
               <div className="p-6 space-y-4">
@@ -368,8 +379,8 @@ const UpdateUser = () => {
                     value={form.status || ""}
                     onChange={handleChange}
                     options={[
-                      { value: 1, label: "Kích hoạt", color: "green" },
-                      { value: 0, label: "Vô hiệu", color: "red" },
+                      { value: 1, label: "Kích hoạt" },
+                      { value: 0, label: "Vô hiệu" },
                     ]}
                   />
                 </div>
@@ -386,7 +397,7 @@ const UpdateUser = () => {
                 >
                   {updating ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      <Loader2 size={18} className="animate-spin" />
                       Đang lưu...
                     </>
                   ) : (
@@ -404,7 +415,7 @@ const UpdateUser = () => {
                 >
                   {resetting ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      <Loader2 size={18} className="animate-spin" />
                       Đang xử lý...
                     </>
                   ) : (
@@ -430,8 +441,8 @@ const UpdateUser = () => {
 
       {/* Reset Password Confirmation Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowResetConfirm(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
                 <Key size={20} className="text-orange-600" />
@@ -504,17 +515,24 @@ const Select = ({ label, icon, options, ...props }) => (
     <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
       {icon} {label}
     </label>
-    <select
-      {...props}
-      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white cursor-pointer"
-    >
-      <option value="">Chọn {label.toLowerCase()}</option>
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <div className="relative">
+      <select
+        {...props}
+        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none bg-white cursor-pointer hover:border-blue-400"
+      >
+        <option value="">Chọn {label.toLowerCase()}</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+    </div>
   </div>
 );
 

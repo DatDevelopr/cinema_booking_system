@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { 
   Pencil, 
   Trash2, 
@@ -9,17 +9,23 @@ import {
   Film,
   Tag,
   Hash,
-  AlertCircle,
   CheckCircle,
   Layers,
-  Grid3x3
+  Grid3x3,
+  Loader2
 } from "lucide-react";
 import { genreApi } from "../../../api/genre.api";
+import useToast from "../../../hooks/useToastSimple";
 
 const GenreManagement = () => {
+  const toast = useToast();
+  
   /* ================= STATE ================= */
   const [genres, setGenres] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -28,27 +34,35 @@ const GenreManagement = () => {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const [sortOrder, setSortOrder] = useState(null); // null | asc | desc
+  const [sortOrder, setSortOrder] = useState(null);
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingGenre, setEditingGenre] = useState(null);
   const [formName, setFormName] = useState("");
+  
+  const inputRef = useRef(null);
 
   /* ================= DEBOUNCE SEARCH ================= */
   useEffect(() => {
     const timer = setTimeout(() => {
-      setPage(1);
       setDebouncedSearch(search);
+      setPage(1);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [search]);
 
-  /* ================= FETCH DATA ================= */
-  const fetchGenres = async () => {
-    try {
-      setLoading(true);
+  // Auto focus input when modal opens
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
 
+  /* ================= FETCH DATA ================= */
+  const fetchGenres = useCallback(async () => {
+    if (isFirstLoad) setFetching(true);
+    
+    try {
       const res = await genreApi.get10Genres({
         page,
         limit: 10,
@@ -64,23 +78,24 @@ const GenreManagement = () => {
       setTotalItems(pagination.total);
     } catch (error) {
       console.error("Fetch lỗi:", error);
+      toast.error("Không thể tải danh sách thể loại");
     } finally {
-      setLoading(false);
+      setFetching(false);
+      setIsFirstLoad(false);
     }
-  };
+  }, [page, debouncedSearch, sortOrder, isFirstLoad, toast]);
 
   useEffect(() => {
     fetchGenres();
-  }, [page, debouncedSearch, sortOrder]);
+  }, [fetchGenres]);
 
   /* ================= SORT ================= */
-  const handleSort = () => {
+  const handleSort = useCallback(() => {
     setPage(1);
-
     if (!sortOrder) setSortOrder("asc");
     else if (sortOrder === "asc") setSortOrder("desc");
     else setSortOrder(null);
-  };
+  }, [sortOrder]);
 
   /* ================= MODAL ================= */
   const openCreateModal = () => {
@@ -99,6 +114,7 @@ const GenreManagement = () => {
     setIsOpen(false);
     setEditingGenre(null);
     setFormName("");
+    setSubmitting(false);
   };
 
   /* ================= SAVE ================= */
@@ -106,44 +122,47 @@ const GenreManagement = () => {
     e.preventDefault();
 
     if (!formName.trim()) {
-      alert("Tên thể loại không được để trống");
+      toast.warning("Tên thể loại không được để trống");
       return;
     }
 
+    if (submitting) return;
+
     try {
-      setLoading(true);
+      setSubmitting(true);
 
       if (editingGenre) {
         await genreApi.updateGenre(editingGenre.genre_id, {
           genre_name: formName.trim(),
         });
-        alert("Cập nhật thành công");
+        toast.success("Cập nhật thể loại thành công!");
       } else {
         await genreApi.createGenre({
           genre_name: formName.trim(),
         });
-        alert("Thêm thành công");
+        toast.success("Thêm thể loại mới thành công!");
       }
 
       closeModal();
-      fetchGenres();
+      setPage(1);
+      await fetchGenres();
     } catch (error) {
       if (error.response) {
         const status = error.response.status;
         const message = error.response.data?.message;
 
         if (status === 409) {
-          alert(message || "Tên thể loại đã tồn tại");
+          toast.warning(message || "Tên thể loại đã tồn tại");
         } else if (status === 400) {
-          alert(message || "Dữ liệu không hợp lệ");
+          toast.warning(message || "Dữ liệu không hợp lệ");
         } else {
-          alert("Có lỗi xảy ra");
+          toast.error("Có lỗi xảy ra");
         }
       } else {
-        alert("Không kết nối được server");
+        toast.error("Không kết nối được server");
       }
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -152,36 +171,50 @@ const GenreManagement = () => {
     if (!window.confirm(`Bạn có chắc muốn xóa thể loại "${genreName}"?`)) return;
 
     try {
+      setDeletingId(id);
       await genreApi.deleteGenre(id);
 
       if (genres.length === 1 && page > 1) {
         setPage(page - 1);
       } else {
-        fetchGenres();
+        await fetchGenres();
       }
-      alert("Xóa thành công");
+      toast.success(`Đã xóa thể loại "${genreName}"`);
     } catch (error) {
       console.error("Xoá lỗi:", error);
-      alert(error?.response?.data?.message || "Có lỗi xảy ra khi xóa");
+      toast.error(error?.response?.data?.message || "Có lỗi xảy ra khi xóa");
+    } finally {
+      setDeletingId(null);
     }
+  };
+
+  // Stats with useMemo
+  const stats = useMemo(() => ({
+    total: totalItems,
+    showing: genres.length,
+    pages: totalPages,
+  }), [totalItems, genres.length, totalPages]);
+
+  // Sort icon
+  const renderSortIcon = () => {
+    if (!sortOrder) return <ArrowUpDown size={14} className="opacity-40" />;
+    return (
+      <span className={`text-blue-600 ${sortOrder === "asc" ? "rotate-180" : ""}`}>
+        <ArrowUpDown size={14} />
+      </span>
+    );
   };
 
   // Loading Skeleton
   const LoadingSkeleton = () => (
-    <div className="space-y-3">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 animate-pulse">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 flex-1">
-              <div className="w-12 h-12 bg-gray-200 rounded-xl"></div>
-              <div className="flex-1">
-                <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-48"></div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
-              <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 animate-pulse">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-gray-200 rounded-xl"></div>
+            <div className="flex-1">
+              <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-32"></div>
             </div>
           </div>
         </div>
@@ -210,7 +243,7 @@ const GenreManagement = () => {
       ) : (
         <button
           onClick={openCreateModal}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium transition-all"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm transition-all duration-200"
         >
           <Plus size={20} />
           Thêm thể loại mới
@@ -221,6 +254,8 @@ const GenreManagement = () => {
 
   // Pagination Component
   const Pagination = () => {
+    if (totalPages <= 1) return null;
+
     const maxVisible = 5;
     let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
@@ -304,68 +339,6 @@ const GenreManagement = () => {
     );
   };
 
-  // Modal Form Component
-  const ModalForm = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 animate-slideUp">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              {editingGenre ? <Pencil size={20} className="text-white" /> : <Plus size={20} className="text-white" />}
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              {editingGenre ? "Chỉnh sửa thể loại" : "Thêm thể loại mới"}
-            </h2>
-          </div>
-          <button
-            onClick={closeModal}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-500" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tên thể loại
-            </label>
-            <div className="relative">
-              <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="VD: Hành động, Hài hước, Tình cảm..."
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                autoFocus
-              />
-            </div>
-            <p className="mt-2 text-xs text-gray-500">
-              Tên thể loại nên viết hoa chữ cái đầu
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2.5 rounded-xl font-medium transition-all"
-            >
-              {editingGenre ? "Cập nhật" : "Tạo mới"}
-            </button>
-            <button
-              type="button"
-              onClick={closeModal}
-              className="flex-1 border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl font-medium transition-all"
-            >
-              Hủy bỏ
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -401,7 +374,7 @@ const GenreManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Tổng số thể loại</p>
-                <p className="text-2xl font-bold text-gray-900">{totalItems}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                 <Layers size={20} className="text-blue-600" />
@@ -413,7 +386,7 @@ const GenreManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Hiển thị</p>
-                <p className="text-2xl font-bold text-gray-900">{genres.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.showing}</p>
               </div>
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                 <CheckCircle size={20} className="text-green-600" />
@@ -425,7 +398,7 @@ const GenreManagement = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Số trang</p>
-                <p className="text-2xl font-bold text-gray-900">{totalPages}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.pages}</p>
               </div>
               <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                 <Grid3x3 size={20} className="text-purple-600" />
@@ -434,30 +407,42 @@ const GenreManagement = () => {
           </div>
         </div>
 
-        {/* Search Section */}
+        {/* Search & Sort Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Tìm kiếm thể loại phim..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={18} />
-              </button>
-            )}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm thể loại phim..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <button
+              onClick={handleSort}
+              className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+            >
+              Sắp xếp theo tên
+              {renderSortIcon()}
+            </button>
           </div>
         </div>
 
         {/* Content */}
-        {loading ? (
+        {fetching && isFirstLoad ? (
           <LoadingSkeleton />
         ) : genres.length === 0 ? (
           <EmptyState />
@@ -465,7 +450,7 @@ const GenreManagement = () => {
           <>
             {/* Genres Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {genres.map((genre, index) => (
+              {genres.map((genre) => (
                 <div
                   key={genre.genre_id}
                   className="group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300"
@@ -504,10 +489,15 @@ const GenreManagement = () => {
                       </button>
                       <button
                         onClick={() => handleDelete(genre.genre_id, genre.genre_name)}
-                        className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-all"
+                        disabled={deletingId === genre.genre_id}
+                        className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-all disabled:opacity-50"
                         title="Xóa"
                       >
-                        <Trash2 size={18} />
+                        {deletingId === genre.genre_id ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -516,15 +506,81 @@ const GenreManagement = () => {
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && <Pagination />}
+            <Pagination />
           </>
         )}
       </div>
 
-      {/* Modal Form */}
-      {isOpen && <ModalForm />}
+      {/* Modal Form - Render trực tiếp */}
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fadeIn" onClick={closeModal}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 animate-slideUp" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                  {editingGenre ? <Pencil size={20} className="text-white" /> : <Plus size={20} className="text-white" />}
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {editingGenre ? "Chỉnh sửa thể loại" : "Thêm thể loại mới"}
+                </h2>
+              </div>
+              <button
+                onClick={closeModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                type="button"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
 
-      <style jsx>{`
+            <form onSubmit={handleSubmit} className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tên thể loại
+                </label>
+                <div className="relative">
+                  <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="VD: Hành động, Hài hước, Tình cảm..."
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    disabled={submitting}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Tên thể loại nên viết hoa chữ cái đầu
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2.5 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <Loader2 size={18} className="animate-spin mx-auto" />
+                  ) : (
+                    editingGenre ? "Cập nhật" : "Tạo mới"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex-1 border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl font-medium transition-all"
+                >
+                  Hủy bỏ
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

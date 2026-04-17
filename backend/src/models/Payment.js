@@ -1,12 +1,12 @@
 module.exports = (sequelize, DataTypes) => {
-  return sequelize.define("Payment", {
+  const Payment = sequelize.define("Payment", {
     payment_id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true,
     },
 
-    user_id: {
+    order_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -17,22 +17,22 @@ module.exports = (sequelize, DataTypes) => {
     },
 
     payment_method: {
-      type: DataTypes.STRING(20), // VNPAY | MOMO
+      type: DataTypes.ENUM("VNPAY", "MOMO"),
       allowNull: false,
     },
 
     payment_status: {
-      type: DataTypes.STRING(20), // PENDING | SUCCESS | FAILED
-      allowNull: false,
+      type: DataTypes.ENUM("PENDING", "SUCCESS", "FAILED", "REFUNDED"),
+      defaultValue: "PENDING",
     },
 
     transaction_code: {
-      type: DataTypes.STRING(100), // mã gửi sang gateway
+      type: DataTypes.STRING(100),
       unique: true,
     },
 
     provider_txn_id: {
-      type: DataTypes.STRING(100), // mã VNPay/MoMo trả về
+      type: DataTypes.STRING(100),
     },
 
     payment_time: {
@@ -42,4 +42,12 @@ module.exports = (sequelize, DataTypes) => {
     tableName: "payments",
     timestamps: false,
   });
+
+  Payment.associate = (models) => {
+    Payment.belongsTo(models.Order, {
+      foreignKey: "order_id",
+    });
+  };
+
+  return Payment;
 };

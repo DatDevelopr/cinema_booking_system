@@ -3,6 +3,7 @@ import { movieApi } from "../../../api/movie.api";
 import { genreApi } from "../../../api/genre.api";
 import UploadApi from "../../../api/upload.api";
 import { useNavigate } from "react-router-dom";
+import useToast from "../../../hooks/useToastSimple";
 import {
   Film,
   Video,
@@ -18,15 +19,15 @@ import {
   Check,
   AlertCircle,
   Users,
-  MapPin,
   Tag,
   Eye,
   EyeOff,
-  Image as ImageIcon,
-  Youtube
+  Youtube,
+  Loader2
 } from "lucide-react";
 
 const CreateMovie = () => {
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
@@ -63,13 +64,14 @@ const CreateMovie = () => {
       } catch (err) {
         console.log(err);
         setGenres([]);
+        toast.error("Không thể tải danh sách thể loại");
       } finally {
         setGenreLoading(false);
       }
     };
 
     fetchGenres();
-  }, []);
+  }, [toast]);
 
   /* ================= VALIDATION ================= */
   const validateField = (name, value) => {
@@ -84,13 +86,11 @@ const CreateMovie = () => {
         if (value > 500) return "Thời lượng không hợp lệ (tối đa 500 phút)";
         return "";
       case "release_date":
-        // Chỉ validate định dạng ngày, không kiểm tra tương lai
         if (value && isNaN(new Date(value).getTime())) {
           return "Ngày khởi chiếu không hợp lệ";
         }
         return "";
       case "trailer_url":
-        // Chỉ validate nếu có giá trị
         if (value && value.trim() !== "") {
           if (!value.includes("youtube.com") && !value.includes("youtu.be")) {
             return "URL trailer phải là link YouTube hợp lệ";
@@ -113,7 +113,6 @@ const CreateMovie = () => {
     const isValid = !Object.values(newErrors).some(error => error && error !== "");
     
     if (!isValid) {
-      // Scroll to first error
       const firstError = document.querySelector('.border-red-500');
       if (firstError) {
         firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -160,12 +159,12 @@ const CreateMovie = () => {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Chỉ chọn file ảnh!");
+      toast.warning("Chỉ chọn file ảnh!");
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("Ảnh phải < 2MB!");
+      toast.warning("Ảnh phải nhỏ hơn 2MB!");
       return;
     }
 
@@ -178,8 +177,9 @@ const CreateMovie = () => {
         ...prev,
         poster_url: res.url,
       }));
+      toast.success("Tải ảnh lên thành công");
     } catch {
-      alert("Upload thất bại");
+      toast.error("Upload thất bại");
       setPreview("");
     } finally {
       setUploading(false);
@@ -211,13 +211,13 @@ const CreateMovie = () => {
   const removeImage = () => {
     setPreview("");
     setForm(prev => ({ ...prev, poster_url: "" }));
+    toast.info("Đã xóa ảnh");
   };
 
   /* ================= SUBMIT ================= */
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Mark all fields as touched
     const allFields = ["title", "duration", "release_date", "trailer_url"];
     const newTouched = {};
     allFields.forEach(field => {
@@ -226,13 +226,12 @@ const CreateMovie = () => {
     setTouched(newTouched);
     
     if (!validateForm()) {
-      alert("Vui lòng kiểm tra lại thông tin");
+      toast.warning("Vui lòng kiểm tra lại thông tin");
       return;
     }
 
-    // Kiểm tra genre
     if (selectedGenres.length === 0) {
-      alert("Vui lòng chọn ít nhất một thể loại cho phim");
+      toast.warning("Vui lòng chọn ít nhất một thể loại cho phim");
       return;
     }
 
@@ -246,7 +245,6 @@ const CreateMovie = () => {
         genre_ids: selectedGenres,
       };
 
-      // Remove empty fields
       if (!createData.trailer_url) delete createData.trailer_url;
       if (!createData.release_date) delete createData.release_date;
       if (!createData.director) delete createData.director;
@@ -254,15 +252,14 @@ const CreateMovie = () => {
       if (!createData.country) delete createData.country;
       if (!createData.description) delete createData.description;
 
-      console.log("Creating movie with data:", createData);
       await movieApi.create(createData);
-
-      alert("Tạo phim thành công");
-      navigate("/admin/movies");
+      toast.success("Tạo phim thành công");
+      setTimeout(() => {
+        navigate("/admin/movies");
+      }, 1500);
     } catch (err) {
       console.error("Create error:", err);
-      const errorMessage = err?.response?.data?.message || "Có lỗi xảy ra khi tạo phim";
-      alert(errorMessage);
+      toast.error(err?.response?.data?.message || "Có lỗi xảy ra khi tạo phim");
     } finally {
       setLoading(false);
     }
@@ -282,8 +279,13 @@ const CreateMovie = () => {
           </button>
 
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Thêm phim mới</h1>
-            <p className="text-gray-500 mt-1">Nhập thông tin chi tiết về bộ phim</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+                <Film size={20} className="text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900">Thêm phim mới</h1>
+            </div>
+            <p className="text-gray-600 ml-13">Nhập thông tin chi tiết về bộ phim</p>
           </div>
         </div>
 
@@ -293,8 +295,11 @@ const CreateMovie = () => {
             {/* Basic Information Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <h2 className="text-lg font-semibold text-gray-900">Thông tin cơ bản</h2>
-                <p className="text-sm text-gray-500">Các thông tin chính của phim</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
+                  <h2 className="text-lg font-semibold text-gray-900">Thông tin cơ bản</h2>
+                </div>
+                <p className="text-sm text-gray-500 mt-1 ml-3">Các thông tin chính của phim</p>
               </div>
               
               <div className="p-6 space-y-5">
@@ -395,14 +400,17 @@ const CreateMovie = () => {
             {/* Poster Upload Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <h2 className="text-lg font-semibold text-gray-900">Poster phim</h2>
-                <p className="text-sm text-gray-500">Tải lên ảnh poster cho phim</p>
+                <div className="flex items-center gap-2">
+                  <Upload size={18} className="text-blue-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Poster phim</h2>
+                </div>
+                <p className="text-sm text-gray-500 ml-7">Tải lên ảnh poster cho phim</p>
               </div>
               
               <div className="p-6">
                 {!preview && !form.poster_url ? (
                   <div
-                    className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                    className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
                       dragActive
                         ? "border-blue-500 bg-blue-50"
                         : "border-gray-300 hover:border-blue-400 bg-gray-50"
@@ -457,7 +465,7 @@ const CreateMovie = () => {
                 )}
                 {uploading && (
                   <div className="mt-3 flex items-center justify-center gap-2 text-blue-600">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
+                    <Loader2 size={16} className="animate-spin" />
                     <span className="text-sm">Đang tải lên...</span>
                   </div>
                 )}
@@ -467,14 +475,17 @@ const CreateMovie = () => {
             {/* Genres Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <h2 className="text-lg font-semibold text-gray-900">Thể loại</h2>
-                <p className="text-sm text-gray-500">Chọn thể loại cho phim (có thể chọn nhiều)</p>
+                <div className="flex items-center gap-2">
+                  <Tag size={18} className="text-blue-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Thể loại</h2>
+                </div>
+                <p className="text-sm text-gray-500 ml-7">Chọn thể loại cho phim (có thể chọn nhiều)</p>
               </div>
               
               <div className="p-6">
                 {genreLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent" />
+                    <Loader2 size={24} className="animate-spin text-blue-600" />
                   </div>
                 ) : genres.length === 0 ? (
                   <div className="text-center py-8">
@@ -509,7 +520,7 @@ const CreateMovie = () => {
                     </p>
                   </div>
                 )}
-                {selectedGenres.length === 0 && (
+                {selectedGenres.length === 0 && !genreLoading && (
                   <p className="text-xs text-orange-500 mt-2">
                     Vui lòng chọn ít nhất một thể loại
                   </p>
@@ -520,7 +531,10 @@ const CreateMovie = () => {
             {/* Status & Actions Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <h2 className="text-lg font-semibold text-gray-900">Trạng thái & Hành động</h2>
+                <div className="flex items-center gap-2">
+                  <Eye size={18} className="text-blue-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Trạng thái & Hành động</h2>
+                </div>
               </div>
               
               <div className="p-6 space-y-4">
@@ -563,7 +577,7 @@ const CreateMovie = () => {
                 >
                   {loading ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      <Loader2 size={18} className="animate-spin" />
                       Đang xử lý...
                     </>
                   ) : (
@@ -579,6 +593,7 @@ const CreateMovie = () => {
                   onClick={() => navigate("/admin/movies")}
                   className="w-full flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 py-3 rounded-xl font-medium transition-all"
                 >
+                  <X size={18} />
                   Hủy bỏ
                 </button>
               </div>

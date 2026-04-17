@@ -1,59 +1,61 @@
-const { sequelize, ShowtimeSeat } = require("../models");
+const { ShowtimeSeat } = require("../models");
+const { sequelize } = require("../models");
 const socket = require("../socket");
 
-exports.holdSeats = async (req, res) => {
+exports.bookSeats = async (req, res) => {
   const { showtime_id, seat_ids } = req.body;
-  const now = new Date();
-
-  const transaction = await sequelize.transaction();
+  const t = await sequelize.transaction();
 
   try {
-    // 1️⃣ LOCK ghế
     const seats = await ShowtimeSeat.findAll({
       where: {
         showtime_id,
         seat_id: seat_ids,
       },
-      lock: transaction.LOCK.UPDATE,
-      transaction,
+      transaction: t,
+      lock: t.LOCK.UPDATE,
     });
 
+    // ❗ check đủ ghế
     if (seats.length !== seat_ids.length) {
-      throw new Error("Ghế không tồn tại");
+      throw new Error("Một số ghế không tồn tại");
     }
 
-    // 2️⃣ check trạng thái
-    const invalid = seats.find(s => s.status !== "AVAILABLE");
-    if (invalid) {
-      throw new Error("Có ghế đã được giữ hoặc đặt");
+    const now = new Date();
+
+    // ❗ check trạng thái + hết hạn
+    for (let s of seats) {
+      if (s.status !== "HOLD" || !s.hold_at || s.hold_at < now) {
+        throw new Error("Ghế đã hết thời gian giữ hoặc không hợp lệ");
+      }
     }
 
-    // 3️⃣ HOLD
+    // ✅ update
     await ShowtimeSeat.update(
       {
-        status: "HOLD",
-        hold_at: now,
+        status: "BOOKED",
+        hold_at: null,
       },
       {
         where: {
           showtime_id,
           seat_id: seat_ids,
         },
-        transaction,
+        transaction: t,
       }
     );
 
-    await transaction.commit();
+    await t.commit();
 
-    // 4️⃣ realtime
     socket.emitSeatUpdate(showtime_id, {
       seat_ids,
-      status: "HOLD",
+      status: "BOOKED",
     });
 
-    res.json({ message: "Giữ ghế thành công" });
+    res.json({ message: "Đặt vé thành công" });
+
   } catch (err) {
-    await transaction.rollback();
-    res.status(409).json({ message: err.message });
+    await t.rollback();
+    res.status(400).json({ message: err.message });
   }
 };

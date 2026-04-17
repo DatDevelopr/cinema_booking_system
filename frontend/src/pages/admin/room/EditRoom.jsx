@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { roomApi } from "../../../api/room.api";
 import { cinemaApi } from "../../../api/cinema.api";
+import useToast from "../../../hooks/useToastSimple";
 import {
   ArrowLeft,
   Building2,
@@ -14,10 +15,12 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle,
-  Edit3
+  Edit3,
+  Loader2,
 } from "lucide-react";
 
 const EditRoom = () => {
+  const toast = useToast();
   const navigate = useNavigate();
   const { id } = useParams();
 
@@ -34,7 +37,7 @@ const EditRoom = () => {
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
-  const [success, setSuccess] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   /* ================= FETCH ================= */
   useEffect(() => {
@@ -59,7 +62,7 @@ const EditRoom = () => {
         setCinemas(cinemaRes.data?.data || cinemaRes.data || []);
       } catch (err) {
         console.error(err);
-        alert("Không thể tải thông tin phòng");
+        toast.error("Không thể tải thông tin phòng");
         navigate("/admin/rooms");
       } finally {
         setFetching(false);
@@ -67,13 +70,14 @@ const EditRoom = () => {
     };
 
     fetchData();
-  }, [id, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   /* ================= HANDLE ================= */
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-    
+
     if (touched[name]) {
       validateField(name, value);
     }
@@ -81,22 +85,22 @@ const EditRoom = () => {
 
   const handleBlur = (e) => {
     const { name } = e.target;
-    setTouched(prev => ({ ...prev, [name]: true }));
+    setTouched((prev) => ({ ...prev, [name]: true }));
     validateField(name, form[name]);
   };
 
   /* ================= VALIDATE ================= */
   const validateField = (name, value) => {
     let error = "";
-    
+
     switch (name) {
       case "room_name":
         if (!value.trim()) error = "Tên phòng không được để trống";
         else if (value.length < 2) error = "Tên phòng phải có ít nhất 2 ký tự";
         break;
     }
-    
-    setErrors(prev => ({ ...prev, [name]: error }));
+
+    setErrors((prev) => ({ ...prev, [name]: error }));
     return error;
   };
 
@@ -109,17 +113,25 @@ const EditRoom = () => {
 
   /* ================= SUBMIT ================= */
   const handleSubmit = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      toast.warning("Vui lòng kiểm tra lại thông tin");
+      return;
+    }
 
     try {
       setLoading(true);
       await roomApi.update(id, { room_name: form.room_name });
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-      alert("Cập nhật thành công! 🎉");
-      navigate("/admin/rooms");
+      setSaveSuccess(true);
+      toast.success("Cập nhật thành công");
+      setTimeout(() => {
+        setSaveSuccess(false);
+        navigate("/admin/rooms");
+      }, 1500);
     } catch (err) {
-      alert(err?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại");
+      console.error(err);
+      toast.error(
+        err?.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại",
+      );
     } finally {
       setLoading(false);
     }
@@ -145,12 +157,14 @@ const EditRoom = () => {
           return (
             <div key={i} className="flex items-center gap-2">
               <div className="w-7 text-center">
-                <span className="text-xs font-semibold text-gray-400">{rowChar}</span>
+                <span className="text-xs font-semibold text-gray-400">
+                  {rowChar}
+                </span>
               </div>
               <div className="flex gap-1 flex-wrap">
                 {Array.from({ length: displayCols }).map((_, j) => {
                   const seatNumber = j + 1;
-                  
+
                   return (
                     <div
                       key={j}
@@ -179,13 +193,16 @@ const EditRoom = () => {
   };
 
   const totalSeats = form.rows * form.seats_per_row;
-  const selectedCinema = cinemas.find(c => c.cinema_id === form.cinema_id);
+  const selectedCinema = cinemas.find((c) => c.cinema_id === form.cinema_id);
 
   if (fetching) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
+          <Loader2
+            size={48}
+            className="animate-spin text-blue-600 mx-auto mb-4"
+          />
           <p className="text-gray-500">Đang tải thông tin phòng...</p>
         </div>
       </div>
@@ -195,7 +212,6 @@ const EditRoom = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
         {/* Header */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -211,12 +227,16 @@ const EditRoom = () => {
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
                     <Monitor size={20} className="text-white" />
                   </div>
-                  <h1 className="text-3xl font-bold text-gray-900">Chỉnh sửa phòng chiếu</h1>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    Chỉnh sửa phòng chiếu
+                  </h1>
                 </div>
-                <p className="text-gray-600 ml-13">Cập nhật thông tin và cấu hình ghế ngồi</p>
+                <p className="text-gray-600 ml-13">
+                  Cập nhật thông tin và cấu hình ghế ngồi
+                </p>
               </div>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => navigate("/admin/rooms")}
@@ -232,10 +252,10 @@ const EditRoom = () => {
               >
                 {loading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <Loader2 size={18} className="animate-spin" />
                     Đang lưu...
                   </>
-                ) : success ? (
+                ) : saveSuccess ? (
                   <>
                     <CheckCircle size={18} />
                     Đã lưu
@@ -258,11 +278,15 @@ const EditRoom = () => {
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
-                  <h2 className="text-lg font-semibold text-gray-900">Thông tin phòng chiếu</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Thông tin phòng chiếu
+                  </h2>
                 </div>
-                <p className="text-sm text-gray-500 mt-1 ml-3">Thông tin cơ bản của phòng</p>
+                <p className="text-sm text-gray-500 mt-1 ml-3">
+                  Thông tin cơ bản của phòng
+                </p>
               </div>
-              
+
               <div className="p-6 space-y-5">
                 {/* Cinema Display */}
                 <div className="space-y-2">
@@ -271,7 +295,10 @@ const EditRoom = () => {
                     Rạp chiếu
                   </label>
                   <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Building2
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
                     <input
                       type="text"
                       value={selectedCinema?.cinema_name || "Đang tải..."}
@@ -279,7 +306,9 @@ const EditRoom = () => {
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                     />
                   </div>
-                  <p className="text-xs text-gray-400">Không thể thay đổi rạp sau khi tạo</p>
+                  <p className="text-xs text-gray-400">
+                    Không thể thay đổi rạp sau khi tạo
+                  </p>
                 </div>
 
                 {/* Room Name */}
@@ -313,18 +342,26 @@ const EditRoom = () => {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <LayoutGrid size={18} className="text-blue-600" />
-                      <span className="text-sm font-medium text-gray-700">Cấu hình ghế</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        Cấu hình ghế
+                      </span>
                     </div>
-                    <div className="text-2xl font-bold text-blue-600">{totalSeats.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {totalSeats.toLocaleString()}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 pt-3 border-t border-blue-100">
                     <div>
                       <p className="text-xs text-gray-500">Số hàng</p>
-                      <p className="text-sm font-semibold text-gray-900">{form.rows} hàng</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {form.rows} hàng
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Ghế / hàng</p>
-                      <p className="text-sm font-semibold text-gray-900">{form.seats_per_row} ghế</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {form.seats_per_row} ghế
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
@@ -343,15 +380,19 @@ const EditRoom = () => {
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
                 <div className="flex items-center gap-2">
                   <Edit3 size={18} className="text-blue-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">Quản lý ghế ngồi</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Quản lý ghế ngồi
+                  </h2>
                 </div>
-                <p className="text-sm text-gray-500 ml-7">Tùy chỉnh ghế VIP và cấu hình chi tiết</p>
+                <p className="text-sm text-gray-500 ml-7">
+                  Tùy chỉnh ghế VIP và cấu hình chi tiết
+                </p>
               </div>
-              
+
               <div className="p-6">
                 <button
                   onClick={goToSeatEditor}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white py-3 rounded-xl font-medium shadow-sm transition-all duration-200"
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-3 rounded-xl font-medium shadow-sm transition-all duration-200"
                 >
                   <Pencil size={18} />
                   Chỉnh sửa sơ đồ ghế
@@ -367,11 +408,15 @@ const EditRoom = () => {
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
                 <div className="flex items-center gap-2">
                   <LayoutGrid size={18} className="text-blue-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">Sơ đồ ghế (Preview)</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Sơ đồ ghế (Preview)
+                  </h2>
                 </div>
-                <p className="text-sm text-gray-500 ml-7">Xem trước cấu hình ghế ngồi</p>
+                <p className="text-sm text-gray-500 ml-7">
+                  Xem trước cấu hình ghế ngồi
+                </p>
               </div>
-              
+
               <div className="p-6">
                 {/* Screen */}
                 <div className="text-center mb-6">
@@ -397,7 +442,9 @@ const EditRoom = () => {
                     </div>
                     <div className="flex items-center gap-1.5 text-gray-400">
                       <Info size={12} />
-                      <span>Chi tiết ghế VIP xem trong trang chỉnh sửa ghế</span>
+                      <span>
+                        Chi tiết ghế VIP xem trong trang chỉnh sửa ghế
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -414,6 +461,23 @@ const EditRoom = () => {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

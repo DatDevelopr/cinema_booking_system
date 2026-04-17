@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { authApi } from "../../../api/auth.api";
 import OTPModal from "../../../components/OTPModal";
 import { Eye, EyeOff, Mail, Lock, User, Phone, Calendar, Users, Shield, ChevronRight } from "lucide-react";
+import useToast from "../../../hooks/useToastSimple";
 
 export default function Register() {
   const navigate = useNavigate();
+  const toast = useToast();
 
   const initialForm = {
     full_name: "",
@@ -103,7 +105,7 @@ export default function Register() {
     setTouched(newTouched);
     
     if (!agree) {
-      alert("Bạn phải đồng ý với Điều khoản dịch vụ");
+      toast.warning("Bạn phải đồng ý với Điều khoản dịch vụ");
       return false;
     }
     
@@ -114,7 +116,7 @@ export default function Register() {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert("Vui lòng kiểm tra lại thông tin");
+      toast.warning("Vui lòng kiểm tra lại thông tin");
       return;
     }
 
@@ -122,9 +124,10 @@ export default function Register() {
       setLoading(true);
       await authApi.sendOTP(form.email);
       setShowOTP(true);
+      toast.info("Mã OTP đã được gửi đến email của bạn");
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.message || "Không thể gửi OTP, vui lòng thử lại");
+      toast.error(err?.response?.data?.message || "Không thể gửi OTP, vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -134,14 +137,16 @@ export default function Register() {
     try {
       setLoading(true);
       const res = await authApi.register({ ...form, otp });
-      alert(res.data.message || "Đăng ký thành công!");
+      toast.success(res.data.message || "Đăng ký thành công! 🎉");
       setForm(initialForm);
       setAgree(false);
       setShowOTP(false);
-      navigate("/auth");
+      setTimeout(() => {
+        navigate("/auth");
+      }, 1500);
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.message || "Đăng ký thất bại");
+      toast.error(err?.response?.data?.message || "Đăng ký thất bại");
     } finally {
       setLoading(false);
     }
@@ -151,10 +156,10 @@ export default function Register() {
     try {
       setLoading(true);
       await authApi.sendOTP(form.email);
-      alert("Đã gửi lại OTP thành công");
+      toast.success("Đã gửi lại OTP thành công");
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.message || "Không thể gửi lại OTP");
+      toast.error(err?.response?.data?.message || "Không thể gửi lại OTP");
     } finally {
       setLoading(false);
     }

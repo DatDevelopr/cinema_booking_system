@@ -1,37 +1,50 @@
 module.exports = (sequelize, DataTypes) => {
-  return sequelize.define("Ticket", {
-    ticket_id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
+  const Ticket = sequelize.define(
+    "Ticket",
+    {
+      ticket_id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+      },
 
-    user_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-    },
+      showtime_seat_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
 
-    showtime_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-    },
+      booking_time: {
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+      },
 
-    seat_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
+      ticket_status: {
+        type: DataTypes.ENUM(
+          "PENDING", // ✅ mới thêm
+          "BOOKED",
+          "CANCELLED",
+          "USED",
+        ),
+        defaultValue: "PENDING",
+      },
     },
+    {
+      tableName: "tickets",
+      timestamps: false,
+    },
+  );
 
-    booking_time: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
+  Ticket.associate = (models) => {
+    // liên kết ghế theo suất chiếu
+    Ticket.belongsTo(models.ShowtimeSeat, {
+      foreignKey: "showtime_seat_id",
+    });
 
-    ticket_status: {
-      type: DataTypes.STRING(20), // BOOKED | CANCELLED
-      defaultValue: "BOOKED",
-    },
-  }, {
-    tableName: "tickets",
-    timestamps: false,
-  });
+    // liên kết order (qua bảng trung gian)
+    Ticket.hasMany(models.OrderTicket, {
+      foreignKey: "ticket_id",
+    });
+  };
+
+  return Ticket;
 };
