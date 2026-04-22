@@ -17,7 +17,10 @@ import HistoryPage from "../pages/client/profile/pages/HistoryPage";
 import ForgotPassword from "../pages/client/auth/ForgotPassword";
 import ResetPassword from "../pages/client/auth/ResetPassword";
 import MovieDetail from "../pages/client/home/components/MovieDetail";
-import BookingPage from "../pages/client/booking/BookingPage";
+import BookingPage from "../pages/client/booking/BookingSeatPage";
+import ServiceAndPaymentPage from "../pages/client/booking/ServiceAndPaymentPage";
+import PaymentFailPage from "../pages/client/payment/PaymentFailPage";
+import PaymentSuccessPage from "../pages/client/payment/PaymentSuccessPage";
 
 import Dashboard from "../pages/admin/dashboard/Dashboard";
 import Overview from "../pages/admin/Overview";
@@ -60,13 +63,24 @@ const AppRoutes = () => {
         <Route path="/movies/:idSlug" element={<MovieDetail />} />
         <Route path="/showtimes" element={<ShowtimePage />} />
         <Route
-          path="/booking/:showtime_id"
+          path="/booking/:showtime_id/seats"
           element={
             <ProtectedRoute>
               <BookingPage />
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/booking/:showtime_id/services"
+          element={
+            <ProtectedRoute>
+              <ServiceAndPaymentPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/payment-fail" element={<PaymentFailPage />} />
+        <Route path="/payment-success" element={<PaymentSuccessPage />} />
         <Route
           path="/auth"
           element={

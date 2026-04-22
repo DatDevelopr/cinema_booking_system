@@ -30,20 +30,20 @@ exports.bookTickets = async (req, res) => {
 
     if (!showtime_id || !seat_ids || seat_ids.length === 0) {
       await t.rollback();
-      return res.status(400).json({ 
-        success: false, 
-        message: "Thiếu showtime_id hoặc seat_ids" 
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu showtime_id hoặc seat_ids",
       });
     }
 
-    // 1. Kiểm tra suất chiếu
+    /* ================= 1. CHECK SHOWTIME ================= */
     const showtime = await Showtime.findByPk(showtime_id, {
       include: [
         { model: Movie, attributes: ["movie_id", "title", "poster_url"] },
-        { 
-          model: Room, 
-          include: [{ model: Cinema, attributes: ["cinema_id", "cinema_name"] }] 
-        }
+        {
+          model: Room,
+          include: [{ model: Cinema, attributes: ["cinema_id", "cinema_name"] }],
+        },
       ],
       transaction: t,
       lock: t.LOCK.UPDATE,
@@ -51,130 +51,156 @@ exports.bookTickets = async (req, res) => {
 
     if (!showtime || showtime.status !== "UPCOMING") {
       await t.rollback();
-      return res.status(400).json({ 
-        success: false, 
-        message: "Suất chiếu không tồn tại hoặc không còn khả dụng" 
+      return res.status(400).json({
+        success: false,
+        message: "Suất chiếu không khả dụng",
       });
     }
 
-    // 2. Lấy và khóa ghế
+    /* ================= 2. LOCK SEATS ================= */
     const showtimeSeats = await ShowtimeSeat.findAll({
       where: {
         showtime_id,
         seat_id: { [Op.in]: seat_ids },
       },
-      include: [{ model: Seat, attributes: ["seat_row", "seat_number", "seat_type"] }],
+      include: [
+        { model: Seat, attributes: ["seat_row", "seat_number", "seat_type"] },
+      ],
       transaction: t,
       lock: t.LOCK.UPDATE,
     });
 
     if (showtimeSeats.length !== seat_ids.length) {
       await t.rollback();
-      return res.status(400).json({ 
-        success: false, 
-        message: "Một số ghế không tồn tại" 
+      return res.status(400).json({
+        success: false,
+        message: "Một số ghế không tồn tại",
       });
     }
 
-    const invalidSeats = showtimeSeats.filter(seat => 
-      !["AVAILABLE", "HOLD"].includes(seat.status)
+    const invalidSeats = showtimeSeats.filter(
+      (s) => !["AVAILABLE", "HOLD"].includes(s.status)
     );
 
     if (invalidSeats.length > 0) {
       await t.rollback();
       return res.status(409).json({
         success: false,
-        message: "Một số ghế đã được đặt hoặc giữ bởi người khác",
-        invalidSeats: invalidSeats.map(s => s.seat_id)
+        message: "Một số ghế đã được đặt",
+        invalidSeats: invalidSeats.map((s) => s.seat_id),
       });
     }
 
-    // 3. Tính tiền
-    const ticketTotal = showtimeSeats.reduce((sum, seat) => sum + parseFloat(seat.price || 0), 0);
+    /* ================= 3. CALCULATE PRICE ================= */
+    const ticketTotal = showtimeSeats.reduce(
+      (sum, s) => sum + parseFloat(s.price || 0),
+      0
+    );
 
     let serviceTotal = 0;
     const orderServiceData = [];
 
     if (service_items.length > 0) {
-      const serviceIds = service_items.map(item => item.service_id);
+      const serviceIds = service_items.map((i) => i.service_id);
+
       const services = await Service.findAll({
         where: { service_id: { [Op.in]: serviceIds } },
         transaction: t,
       });
 
       for (const item of service_items) {
-        const service = services.find(s => s.service_id === item.service_id);
-        if (service) {
-          const amount = parseFloat(service.price) * (item.quantity || 1);
-          serviceTotal += amount;
+        const service = services.find((s) => s.service_id === item.service_id);
+        if (!service) continue;
 
-          orderServiceData.push({
-            service_id: item.service_id,
-            quantity: item.quantity || 1,
-            price: service.price,
-            name_snapshot: service.name,
-          });
-        }
+        const amount = parseFloat(service.price) * (item.quantity || 1);
+        serviceTotal += amount;
+
+        orderServiceData.push({
+          service_id: service.service_id,
+          quantity: item.quantity || 1,
+          price: service.price,
+          name_snapshot: service.name,
+        });
       }
     }
 
     const finalAmount = ticketTotal + serviceTotal;
 
-    // 4. Tạo Order
-    const order = await Order.create({
-      user_id: req.user.user_id,
-      total_amount: finalAmount,
-      order_status: "PENDING",
-    }, { transaction: t });
+    /* ================= 4. CREATE ORDER ================= */
+    const order = await Order.create(
+      {
+        user_id: req.user.user_id,
+        total_amount: finalAmount,
+        order_status: "PENDING",
+      },
+      { transaction: t }
+    );
 
     const createdTickets = [];
 
-    // 5. Tạo vé và cập nhật ghế
-    for (const showtimeSeat of showtimeSeats) {
-      const ticket = await Ticket.create({
-        booking_time: new Date(),
-        ticket_status: "BOOKED",
-        showtime_seat_id: showtimeSeat.showtime_seat_id,
-      }, { transaction: t });
+    /* ================= 5. CREATE TICKET + HOLD SEAT ================= */
+    for (const s of showtimeSeats) {
+      const ticket = await Ticket.create(
+        {
+          booking_time: new Date(),
+          ticket_status: "PENDING",
+          showtime_seat_id: s.showtime_seat_id,
+        },
+        { transaction: t }
+      );
 
-      await OrderTicket.create({
-        order_id: order.order_id,
-        ticket_id: ticket.ticket_id,
-      }, { transaction: t });
+      await OrderTicket.create(
+        {
+          order_id: order.order_id,
+          ticket_id: ticket.ticket_id,
+        },
+        { transaction: t }
+      );
 
-      await showtimeSeat.update({
-        status: "BOOKED",
-        hold_at: null,
-      }, { transaction: t });
+      await s.update(
+        {
+          status: "HOLD",
+          hold_at: new Date(), // ✅ cực kỳ quan trọng
+        },
+        { transaction: t }
+      );
 
       createdTickets.push({
         ticket_id: ticket.ticket_id,
-        seat_row: showtimeSeat.Seat.seat_row,
-        seat_number: showtimeSeat.Seat.seat_number,
-        price: showtimeSeat.price,
+        seat_row: s.Seat.seat_row,
+        seat_number: s.Seat.seat_number,
+        price: s.price,
       });
     }
 
-    // 6. Tạo OrderService
+    /* ================= 6. CREATE ORDER SERVICE ================= */
     if (orderServiceData.length > 0) {
       await OrderService.bulkCreate(
-        orderServiceData.map(data => ({ ...data, order_id: order.order_id })),
+        orderServiceData.map((d) => ({
+          ...d,
+          order_id: order.order_id,
+        })),
         { transaction: t }
       );
     }
 
     await t.commit();
 
-    // Realtime
-    socket.emitSeatUpdate(showtime_id, { seat_ids, status: "BOOKED" });
+    /* ================= SOCKET ================= */
+    socket.emitSeatUpdate(showtime_id, {
+      seat_ids,
+      status: "HOLD", // ✅ đúng
+    });
 
+    /* ================= RESPONSE ================= */
     return res.status(201).json({
       success: true,
-      message: "Đặt vé thành công!",
+      message: "Giữ ghế thành công, vui lòng thanh toán",
       data: {
         order_id: order.order_id,
         total_amount: finalAmount,
         tickets: createdTickets,
+        expired_at: new Date(Date.now() + 5 * 60 * 1000), // ⏱ 5 phút
         showtime: {
           showtime_id: showtime.showtime_id,
           start_time: showtime.start_time,
@@ -188,10 +214,10 @@ exports.bookTickets = async (req, res) => {
   } catch (error) {
     await t.rollback();
     console.error("BOOK TICKETS ERROR:", error);
+
     return res.status(500).json({
       success: false,
       message: "Lỗi server khi đặt vé",
-      error: error.message,
     });
   }
 };
@@ -316,11 +342,4 @@ exports.cancelTicket = async (req, res) => {
     console.error("CANCEL TICKET ERROR:", error);
     res.status(500).json({ success: false, message: "Lỗi khi hủy vé" });
   }
-};
-
-module.exports = {
-  bookTickets,
-  getMyTickets,
-  getTicketDetail,
-  cancelTicket,
 };

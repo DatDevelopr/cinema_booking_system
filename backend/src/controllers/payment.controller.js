@@ -1,323 +1,259 @@
-// controllers/payment.controller.js
 const crypto = require("crypto");
-const qs = require("qs");
-const { sequelize, Payment, ShowtimeSeat, Ticket } = require("../models");
+const axios = require("axios");
+const { VNPay, ignoreLogger } = require("vnpay"); 
+
+const {
+  sequelize,
+  Order,
+  Payment,
+  ShowtimeSeat,
+  Ticket,
+  OrderTicket,
+} = require("../models");
+
 const socket = require("../socket");
 
+/* ================= VNPay CONFIG ================= */
+const vnpay = new VNPay({
+  tmnCode: process.env.VNP_TMNCODE,
+  secureSecret: process.env.VNP_HASH_SECRET,
+  vnpayHost: "https://sandbox.vnpayment.vn",
+  testMode: true,
+  hashAlgorithm: "SHA512",
+  loggerFn: ignoreLogger,
+});
+
+/* ================= HELPER ================= */
+function getClientIp(req) {
+  return (
+    req.headers["x-forwarded-for"] ||
+    req.connection?.remoteAddress ||
+    req.socket?.remoteAddress ||
+    req.ip
+  );
+}
+
+/* =========================================================
+   CREATE PAYMENT (VNPay + MoMo)
+========================================================= */
 exports.createPayment = async (req, res) => {
-  const { user_id, amount, payment_method } = req.body;
-
-  const payment = await Payment.create({
-    user_id,
-    amount,
-    payment_method,          // VNPAY | MOMO
-    payment_status: "PENDING",
-    transaction_code: Date.now().toString(),
-    payment_time: new Date(),
-  });
-
-  res.json({
-    payment_id: payment.payment_id,
-    transaction_code: payment.transaction_code,
-  });
-};
-
-exports.paymentCallback = async (req, res) => {
-  const {
-    transaction_code,
-    resultCode, // VNPay: "00" | MoMo: 0
-  } = req.body;
-
-  const transaction = await sequelize.transaction();
+  const t = await sequelize.transaction();
 
   try {
-    /**
-     * 1️⃣ LOCK payment
-     */
-    const payment = await Payment.findOne({
-      where: { transaction_code },
-      transaction,
-      lock: transaction.LOCK.UPDATE,
+    const { order_id, payment_method } = req.body;
+    const method = payment_method?.toUpperCase();
+
+    if (!order_id || !["VNPAY", "MOMO"].includes(method)) {
+      return res.status(400).json({ message: "Invalid data" });
+    }
+
+    const order = await Order.findByPk(order_id, {
+      include: [Payment],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
     });
 
-    if (!payment || payment.payment_status !== "PENDING") {
-      await transaction.rollback();
-      return res.json({ message: "Payment invalid" });
+    if (!order || order.order_status !== "PENDING") {
+      await t.rollback();
+      return res.status(400).json({ message: "Order invalid" });
     }
 
-    /**
-     * ======================
-     * ===== SUCCESS ========
-     * ======================
-     */
-    if (resultCode === "00" || resultCode === 0) {
-      /**
-       * 2️⃣ LOCK ghế user đang HOLD
-       */
-      const seats = await ShowtimeSeat.findAll({
-        where: {
-          user_id: payment.user_id,
-          status: "HOLD",
-        },
-        transaction,
-        lock: transaction.LOCK.UPDATE,
-      });
-
-      if (!seats.length) {
-        await transaction.rollback();
-        return res.json({ message: "No seats to book" });
-      }
-
-      const seatIds = seats.map(s => s.seat_id);
-      const showtimeId = seats[0].showtime_id;
-
-      /**
-       * 3️⃣ BOOK ghế
-       */
-      await ShowtimeSeat.update(
-        { status: "BOOKED", hold_at: null },
-        { where: { seat_id: seatIds }, transaction }
-      );
-
-      /**
-       * 4️⃣ Tạo ticket
-       */
-      const tickets = await Promise.all(
-        seats.map(seat =>
-          Ticket.create(
-            {
-              user_id: payment.user_id,
-              showtime_id: seat.showtime_id,
-              seat_id: seat.seat_id,
-              booking_time: new Date(),
-              ticket_status: "BOOKED",
-            },
-            { transaction }
-          )
-        )
-      );
-
-      /**
-       * 5️⃣ Gán ticket ↔ payment (payment_tickets)
-       */
-      await payment.addTickets(tickets, { transaction });
-
-      /**
-       * 6️⃣ Update payment
-       */
-      await payment.update(
-        { payment_status: "SUCCESS" },
-        { transaction }
-      );
-
-      await transaction.commit();
-
-      socket.emitSeatUpdate(showtimeId, {
-        seat_ids: seatIds,
-        status: "BOOKED",
-      });
-
-      return res.json({ message: "Payment SUCCESS" });
+    if (order.Payment) {
+      await t.rollback();
+      return res.status(400).json({ message: "Order already has payment" });
     }
 
-    /**
-     * ======================
-     * ===== FAILED ========
-     * ======================
-     */
-    await payment.update(
-      { payment_status: "FAILED" },
-      { transaction }
-    );
+    const amount = Math.round(order.total_amount);
+    const transactionCode = `${method}_${order_id}_${Date.now()}`;
+    let paymentUrl = "";
 
-    const seats = await ShowtimeSeat.findAll({
-      where: {
-        user_id: payment.user_id,
-        status: "HOLD",
-      },
-      transaction,
-      lock: transaction.LOCK.UPDATE,
-    });
-
-    const seatIds = seats.map(s => s.seat_id);
-    const showtimeId = seats[0]?.showtime_id;
-
-    if (seatIds.length) {
-      await ShowtimeSeat.update(
-        { status: "AVAILABLE", hold_at: null, user_id: null },
-        { where: { seat_id: seatIds }, transaction }
-      );
-    }
-
-    await transaction.commit();
-
-    if (showtimeId) {
-      socket.emitSeatUpdate(showtimeId, {
-        seat_ids: seatIds,
-        status: "AVAILABLE",
+    /* ================= VNPAY ================= */
+    if (method === "VNPAY") {
+      paymentUrl = vnpay.buildPaymentUrl({
+        vnp_Amount: amount,
+        vnp_IpAddr: getClientIp(req),
+        vnp_TxnRef: transactionCode,
+        vnp_OrderInfo: `Thanh toan don hang ${order_id}`,
+        vnp_ReturnUrl: process.env.VNP_RETURN_URL,
       });
     }
 
-    return res.json({ message: "Payment FAILED" });
+    /* ================= MOMO ================= */
+    if (method === "MOMO") {
+      const requestId = Date.now().toString();
 
-  } catch (err) {
-    await transaction.rollback();
-    console.error("PAYMENT CALLBACK ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
+      const raw = `accessKey=${process.env.MOMO_ACCESS_KEY}&amount=${amount}&extraData=&ipnUrl=${process.env.MOMO_NOTIFY_URL}&orderId=${transactionCode}&orderInfo=Thanh toán đơn ${order_id}&partnerCode=${process.env.MOMO_PARTNER_CODE}&redirectUrl=${process.env.MOMO_RETURN_URL}&requestId=${requestId}&requestType=captureWallet`;
 
-exports.vnpayCallback = async (req, res) => {
-  const vnpParams = { ...req.query };
-  const secureHash = vnpParams.vnp_SecureHash;
+      const signature = crypto
+        .createHmac("sha256", process.env.MOMO_SECRET_KEY)
+        .update(raw)
+        .digest("hex");
 
-  // ❌ bỏ hash trước khi verify
-  delete vnpParams.vnp_SecureHash;
-  delete vnpParams.vnp_SecureHashType;
-
-  /**
-   * 1️⃣ VERIFY CHỮ KÝ
-   */
-  const sortedParams = Object.keys(vnpParams)
-    .sort()
-    .reduce((acc, key) => {
-      acc[key] = vnpParams[key];
-      return acc;
-    }, {});
-
-  const signData = qs.stringify(sortedParams, { encode: false });
-  const hmac = crypto.createHmac("sha512", process.env.VNP_HASH_SECRET);
-  const checkHash = hmac.update(signData).digest("hex");
-
-  if (secureHash !== checkHash) {
-    return res.status(400).send("Invalid VNPay signature");
-  }
-
-  const transaction = await sequelize.transaction();
-
-  try {
-    /**
-     * 2️⃣ LOCK PAYMENT
-     */
-    const payment = await Payment.findOne({
-      where: { transaction_code: vnpParams.vnp_TxnRef },
-      transaction,
-      lock: transaction.LOCK.UPDATE,
-    });
-
-    if (!payment || payment.payment_status !== "PENDING") {
-      await transaction.rollback();
-      return res.redirect("/payment-result?status=invalid");
-    }
-
-    /**
-     * ======================
-     * ===== SUCCESS ========
-     * ======================
-     */
-    if (vnpParams.vnp_ResponseCode === "00") {
-      /**
-       * 3️⃣ LOCK GHẾ HOLD
-       */
-      const seats = await ShowtimeSeat.findAll({
-        where: {
-          user_id: payment.user_id,
-          status: "HOLD",
-        },
-        transaction,
-        lock: transaction.LOCK.UPDATE,
-      });
-
-      if (!seats.length) {
-        await transaction.rollback();
-        return res.redirect("/payment-result?status=empty");
-      }
-
-      const seatIds = seats.map(s => s.seat_id);
-      const showtimeId = seats[0].showtime_id;
-
-      /**
-       * 4️⃣ BOOK GHẾ
-       */
-      await ShowtimeSeat.update(
-        { status: "BOOKED", hold_at: null },
-        { where: { seat_id: seatIds }, transaction }
-      );
-
-      /**
-       * 5️⃣ CREATE TICKET
-       */
-      const tickets = await Promise.all(
-        seats.map(seat =>
-          Ticket.create(
-            {
-              user_id: payment.user_id,
-              showtime_id: seat.showtime_id,
-              seat_id: seat.seat_id,
-              booking_time: new Date(),
-              ticket_status: "BOOKED",
-            },
-            { transaction }
-          )
-        )
-      );
-
-      /**
-       * 6️⃣ LINK PAYMENT ↔ TICKETS
-       */
-      await payment.addTickets(tickets, { transaction });
-
-      /**
-       * 7️⃣ UPDATE PAYMENT
-       */
-      await payment.update(
+      const momoRes = await axios.post(
+        "https://test-payment.momo.vn/v2/gateway/api/create",
         {
-          payment_status: "SUCCESS",
-          provider_txn_id: vnpParams.vnp_TransactionNo,
-        },
-        { transaction }
+          partnerCode: process.env.MOMO_PARTNER_CODE,
+          requestId,
+          amount,
+          orderId: transactionCode,
+          orderInfo: "Thanh toán vé phim",
+          redirectUrl: process.env.MOMO_RETURN_URL,
+          ipnUrl: process.env.MOMO_NOTIFY_URL,
+          requestType: "captureWallet",
+          signature,
+        }
       );
 
-      await transaction.commit();
+      if (momoRes.data.resultCode !== 0) {
+        throw new Error(momoRes.data.message);
+      }
 
+      paymentUrl = momoRes.data.payUrl;
+    }
+
+    /* SAVE PAYMENT */
+    await Payment.create(
+      {
+        order_id,
+        amount,
+        payment_method: method,
+        transaction_code: transactionCode,
+        payment_status: "PENDING",
+      },
+      { transaction: t }
+    );
+
+    await t.commit();
+
+    return res.json({ paymentUrl });
+
+  } catch (err) {
+    await t.rollback();
+    console.error("CREATE PAYMENT ERROR:", err);
+    res.status(500).json({ message: "Create payment error" });
+  }
+};
+
+/* =========================================================
+   CONFIRM BOOKING
+========================================================= */
+const confirmBooking = async (order_id, provider_txn_id) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const order = await Order.findByPk(order_id, {
+      include: {
+        model: OrderTicket,
+        include: [Ticket],
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (!order || order.order_status !== "PENDING") {
+      await t.rollback();
+      return;
+    }
+
+    await order.update({ order_status: "PAID" }, { transaction: t });
+
+    await Payment.update(
+      {
+        payment_status: "SUCCESS",
+        provider_txn_id,
+        payment_time: new Date(),
+      },
+      { where: { order_id }, transaction: t }
+    );
+
+    const seatIds = [];
+    let showtimeId = null;
+
+    for (const ot of order.OrderTickets) {
+      const ticket = ot.Ticket;
+
+      await ticket.update({ ticket_status: "BOOKED" }, { transaction: t });
+
+      const seat = await ShowtimeSeat.findByPk(
+        ticket.showtime_seat_id,
+        { transaction: t }
+      );
+
+      await seat.update(
+        { status: "BOOKED", hold_at: null },
+        { transaction: t }
+      );
+
+      seatIds.push(seat.seat_id);
+      showtimeId = seat.showtime_id;
+    }
+
+    await t.commit();
+
+    if (showtimeId) {
       socket.emitSeatUpdate(showtimeId, {
         seat_ids: seatIds,
         status: "BOOKED",
       });
-
-      return res.redirect("/payment-result?status=success");
     }
 
-    /**
-     * ======================
-     * ===== FAILED ========
-     * ======================
-     */
-    await payment.update(
-      { payment_status: "FAILED" },
-      { transaction }
-    );
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
+};
 
-    const seats = await ShowtimeSeat.findAll({
-      where: {
-        user_id: payment.user_id,
-        status: "HOLD",
+/* =========================================================
+   FAIL BOOKING
+========================================================= */
+const failBooking = async (order_id) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const order = await Order.findByPk(order_id, {
+      include: {
+        model: OrderTicket,
+        include: [Ticket],
       },
-      transaction,
-      lock: transaction.LOCK.UPDATE,
+      transaction: t,
+      lock: t.LOCK.UPDATE,
     });
 
-    const seatIds = seats.map(s => s.seat_id);
-    const showtimeId = seats[0]?.showtime_id;
+    if (!order) return;
 
-    if (seatIds.length) {
-      await ShowtimeSeat.update(
-        { status: "AVAILABLE", hold_at: null, user_id: null },
-        { where: { seat_id: seatIds }, transaction }
+    await order.update({ order_status: "FAILED" }, { transaction: t });
+
+    await Payment.update(
+      { payment_status: "FAILED" },
+      { where: { order_id }, transaction: t }
+    );
+
+    const seatIds = [];
+    let showtimeId = null;
+
+    for (const ot of order.OrderTickets) {
+      const ticket = ot.Ticket;
+
+      await ticket.update(
+        { ticket_status: "CANCELLED" },
+        { transaction: t }
       );
+
+      const seat = await ShowtimeSeat.findByPk(
+        ticket.showtime_seat_id,
+        { transaction: t }
+      );
+
+      await seat.update(
+        { status: "AVAILABLE", hold_at: null },
+        { transaction: t }
+      );
+
+      seatIds.push(seat.seat_id);
+      showtimeId = seat.showtime_id;
     }
 
-    await transaction.commit();
+    await t.commit();
 
     if (showtimeId) {
       socket.emitSeatUpdate(showtimeId, {
@@ -326,11 +262,89 @@ exports.vnpayCallback = async (req, res) => {
       });
     }
 
-    return res.redirect("/payment-result?status=failed");
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
+};
+
+/* =========================================================
+   VNPAY RETURN
+========================================================= */
+exports.vnpayReturn = async (req, res) => {
+  try {
+    const verify = vnpay.verifyReturnUrl(req.query);
+
+    if (!verify.isVerified) {
+      return res.redirect(`${process.env.CLIENT_URL}/payment-fail`);
+    }
+
+    const txnRef = verify.vnp_TxnRef;
+    const order_id = txnRef.split("_")[1];
+
+    if (verify.vnp_ResponseCode === "00") {
+      await confirmBooking(order_id, verify.vnp_TransactionNo);
+
+      return res.redirect(
+        `${process.env.CLIENT_URL}/payment-success?order_id=${order_id}`
+      );
+    }
+
+    await failBooking(order_id);
+
+    return res.redirect(
+      `${process.env.CLIENT_URL}/payment-fail?order_id=${order_id}`
+    );
 
   } catch (err) {
-    await transaction.rollback();
-    console.error("VNPAY CALLBACK ERROR:", err);
-    res.redirect("/payment-result?status=error");
+    console.error(err);
+    res.redirect(`${process.env.CLIENT_URL}/payment-fail`);
+  }
+};
+
+/* =========================================================
+   MOMO NOTIFY (IPN)
+========================================================= */
+exports.momoNotify = async (req, res) => {
+  try {
+    const data = req.body;
+
+    const raw =
+      `accessKey=${process.env.MOMO_ACCESS_KEY}` +
+      `&amount=${data.amount}` +
+      `&extraData=${data.extraData}` +
+      `&message=${data.message}` +
+      `&orderId=${data.orderId}` +
+      `&orderInfo=${data.orderInfo}` +
+      `&orderType=${data.orderType}` +
+      `&partnerCode=${data.partnerCode}` +
+      `&payType=${data.payType}` +
+      `&requestId=${data.requestId}` +
+      `&responseTime=${data.responseTime}` +
+      `&resultCode=${data.resultCode}` +
+      `&transId=${data.transId}`;
+
+    const signature = crypto
+      .createHmac("sha256", process.env.MOMO_SECRET_KEY)
+      .update(raw)
+      .digest("hex");
+
+    if (signature !== data.signature) {
+      return res.status(400).json({ message: "Invalid signature" });
+    }
+
+    const order_id = data.orderId.split("_")[1];
+
+    if (data.resultCode === 0) {
+      await confirmBooking(order_id, data.transId);
+    } else {
+      await failBooking(order_id);
+    }
+
+    return res.json({ message: "OK" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error" });
   }
 };
