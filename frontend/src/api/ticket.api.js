@@ -20,6 +20,11 @@ export const ticketApi = {
   cancel: (ticketId) => {
     return axiosClient.post(`/tickets/${ticketId}/cancel`);
   },
+
+  /* ================= GET ALL TICKETS (ADMIN) ================= */
+  getAll: (params) => {
+    return axiosClient.get("/tickets/all", { params });
+  },
 };
 
 export default ticketApi;

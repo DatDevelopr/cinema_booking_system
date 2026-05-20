@@ -7,7 +7,6 @@ const Navbar = () => {
     { path: "/showtimes", label: "SUẤT CHIẾU" },
     { path: "/movies", label: "PHIM" },
     { path: "/cinema", label: "RẠP" },
-    { path: "/pricing", label: "GIÁ VÉ" },
   ];
 
   return (

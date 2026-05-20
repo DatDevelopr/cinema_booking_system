@@ -51,12 +51,10 @@ export default function MovieCard({ movie }) {
         {/* Poster Container */}
         <div className="relative overflow-hidden">
           <img
-            src={movie.poster_url || "/placeholder-poster.jpg"}
+            src={movie.poster_url}
             alt={movie.title}
             className="w-full h-[340px] object-cover transition-transform duration-500 group-hover:scale-110"
-            onError={(e) => {
-              e.target.src = "/placeholder-poster.jpg";
-            }}
+            
           />
 
           {/* Gradient Overlay */}

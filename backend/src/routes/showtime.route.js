@@ -5,6 +5,7 @@ const { verifyToken } = require("../middlewares");
 /* ================= PUBLIC ================= */
 
 router.get("/by-cinema", showtimeController.getShowtimesByCinema);
+router.get("/movie/:movie_id", showtimeController.getShowtimesByMovie);
 
 
 

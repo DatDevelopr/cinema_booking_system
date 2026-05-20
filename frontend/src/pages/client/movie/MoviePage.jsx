@@ -1,10 +1,10 @@
 import React from 'react';
+import MovieTabs from "../home/components/MovieTabs"
 
 const MoviePage = () => {
   return (
     <div>
-      <h1>Movie Page</h1>
-      <p>This is the movie page.</p>
+      <MovieTabs />
     </div>
   );
 };

@@ -6,6 +6,7 @@ const ticketController = require("../controllers/ticket.controller");
 // middleware auth (bạn thay đúng path)
 const { verifyToken } = require("../middlewares/auth.middleware");
 
+router.get("/all", verifyToken, ticketController.getAllTickets);
 /* =====================================================
    ĐẶT VÉ
 ===================================================== */
@@ -29,5 +30,7 @@ router.get("/:ticket_id", verifyToken, ticketController.getTicketDetail);
 ===================================================== */
 // POST /api/tickets/:ticket_id/cancel
 router.post("/:ticket_id/cancel", verifyToken, ticketController.cancelTicket);
+
+
 
 module.exports = router;

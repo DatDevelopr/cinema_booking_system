@@ -163,7 +163,7 @@ exports.getAllShowtimes = async (req, res) => {
       include: [
         {
           model: Movie,
-          attributes: ["movie_id", "title", "duration"],
+          attributes: ["movie_id", "title", "duration", "release_date", "poster_url", "trailer_url"],
         },
         {
           model: Room,
@@ -213,6 +213,7 @@ exports.getShowtimeDetail = async (req, res) => {
             "duration",
             "release_date",
             "poster_url",
+            "trailer_url",
             "director",
             "actors"
           ],
@@ -633,6 +634,146 @@ exports.getSeatMapByShowtime = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+/*
+==================================================
+LẤY SUẤT CHIẾU THEO PHIM
+GET /api/showtimes/movie/:movie_id
+
+Mục đích:
+- User vào chi tiết phim
+- Hiển thị tất cả suất chiếu của phim đó
+
+Chỉ lấy:
+- thông tin suất chiếu
+- tên phim
+- phòng chiếu
+- rạp chiếu
+==================================================
+*/
+
+exports.getShowtimesByMovie = async (req, res) => {
+  try {
+    const { movie_id } = req.params;
+
+    if (!movie_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu movie_id",
+      });
+    }
+
+    /*
+    ==========================================
+    CHỈ LẤY SUẤT CHIẾU TỪ HIỆN TẠI TRỞ ĐI
+    ==========================================
+    */
+
+    const now = new Date();
+
+    /*
+    ==========================================
+    QUERY SHOWTIMES
+    ==========================================
+    */
+
+    const showtimes = await Showtime.findAll({
+      where: {
+        movie_id: Number(movie_id),
+        status: "UPCOMING",
+
+        // Không lấy suất chiếu quá khứ
+        start_time: {
+          [Op.gte]: now,
+        },
+      },
+
+      attributes: [
+        "showtime_id",
+        "start_time",
+        "end_time",
+        "format",
+        "language",
+        "status",
+      ],
+
+      include: [
+        {
+          model: Movie,
+          attributes: [
+            "movie_id",
+            "slug",
+            "title",
+            "duration",
+            "poster_url",
+          ],
+        },
+        {
+          model: Room,
+          attributes: [
+            "room_id",
+            "room_name",
+          ],
+          include: [
+            {
+              model: Cinema,
+              attributes: [
+                "cinema_id",
+                "cinema_name",
+                "address",
+              ],
+            },
+          ],
+        },
+      ],
+
+      order: [
+        ["start_time", "ASC"],
+      ],
+    });
+
+    /*
+    ==========================================
+    NOT FOUND
+    ==========================================
+    */
+
+    if (!showtimes.length) {
+      return res.json({
+        success: true,
+        message: "Không có suất chiếu sắp tới cho phim này",
+        total: 0,
+        data: [],
+      });
+    }
+
+    /*
+    ==========================================
+    RESPONSE
+    ==========================================
+    */
+
+    return res.json({
+      success: true,
+      message:
+        "Lấy danh sách suất chiếu theo phim thành công",
+      total: showtimes.length,
+      data: showtimes,
+    });
+  } catch (error) {
+    console.error(
+      "GET SHOWTIMES BY MOVIE ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Lỗi server khi lấy suất chiếu theo phim",
+      error: error.message,
+    });
   }
 };
 

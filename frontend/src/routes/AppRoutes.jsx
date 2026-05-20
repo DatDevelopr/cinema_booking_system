@@ -21,8 +21,12 @@ import BookingPage from "../pages/client/booking/BookingSeatPage";
 import ServiceAndPaymentPage from "../pages/client/booking/ServiceAndPaymentPage";
 import PaymentFailPage from "../pages/client/payment/PaymentFailPage";
 import PaymentSuccessPage from "../pages/client/payment/PaymentSuccessPage";
+import ShowtimeByMovie from "../pages/client/movie/ShowtimeByMovie";
+import CinemaDetailPage from "../pages/client/cinema/CinemaDetailPage";
 
 import Dashboard from "../pages/admin/dashboard/Dashboard";
+import MovieRevenue from "../pages/admin/dashboard/MovieRevenue";
+import CinemaRevenue from "../pages/admin/dashboard/CinemaRevenue";
 import Overview from "../pages/admin/Overview";
 import UserManagement from "../pages/admin/user/UserManagement";
 import CreateUser from "../pages/admin/user/CreateUser";
@@ -45,6 +49,7 @@ import SeatEditor from "../pages/admin/room/EditSeat";
 import ServicesManagement from "../pages/admin/services/ServicesManagement";
 import CreateService from "../pages/admin/services/CreateService";
 import EditService from "../pages/admin/services/EditService";
+import TicketManagement from "../pages/admin/ticket/TicketManagement";
 
 const AppRoutes = () => {
   return (
@@ -60,8 +65,10 @@ const AppRoutes = () => {
           }
         />
         <Route path="/movies" element={<MoviePage />} />
+        <Route path="/movies/:idSlug/showtimes" element={<ShowtimeByMovie />} />
         <Route path="/movies/:idSlug" element={<MovieDetail />} />
         <Route path="/showtimes" element={<ShowtimePage />} />
+        <Route path="/cinema" element={<CinemaDetailPage />} />
         <Route
           path="/booking/:showtime_id/seats"
           element={
@@ -99,7 +106,7 @@ const AppRoutes = () => {
         />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/account/tickets" element={<TicketPage />} />
+        <Route path="/account/my-tickets" element={<TicketPage />} />
         <Route path="/account/transactions" element={<HistoryPage />} />
       </Route>
 
@@ -113,6 +120,8 @@ const AppRoutes = () => {
         }
       >
         <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard/movie-revenue" element={<MovieRevenue />} />
+        <Route path="dashboard/cinema-revenue" element={<CinemaRevenue />} />
 
         <Route path="dashboard/*" element={<Dashboard />}>
           <Route index element={<Overview />} />
@@ -149,6 +158,9 @@ const AppRoutes = () => {
           <Route index element={<ServicesManagement />} />
           <Route path="create" element={<CreateService />} />
           <Route path=":id/edit" element={<EditService />} />
+        </Route>
+        <Route path="tickets">
+          <Route index element={<TicketManagement />} />
         </Route>
       </Route>
     </Routes>

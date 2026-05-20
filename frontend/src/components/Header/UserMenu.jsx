@@ -35,7 +35,7 @@ const UserMenu = () => {
 
   const menuItems = [
     { path: "account/profile", label: "Thông tin của tôi", icon: User },
-    { path: "account/tickets", label: "Vé của tôi", icon: Ticket },
+    { path: "account/my-tickets", label: "Vé của tôi", icon: Ticket },
     { path: "account/transactions", label: "Lịch sử thanh toán", icon: CreditCard },
   ];
 

@@ -32,6 +32,10 @@ app.use("/api/services", require("./routes/services.route"));
 app.use("/api/tickets", require("./routes/ticket.route"));
 app.use("/api/payment", require("./routes/payment.route"));
 app.use("/api/orders", require("./routes/order.route"));
+app.use("/api/revenue", require("./routes/revenue.route"));
+app.use("/api/movie-revenue", require("./routes/movieRevenue.route"));
+app.use("/api/cinema-revenue", require("./routes/cinemaRevenue.route"));
+app.use("/api/recommendations", require("./routes/recommendation.routes"));
 
 
 module.exports = app;

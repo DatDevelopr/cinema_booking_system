@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 
 const tabs = [
   { name: "Thông Tin Cá Nhân", path: "/account/profile" },
-  { name: "Vé Xem Phim", path: "/account/tickets" },
+  { name: "Vé Xem Phim", path: "/account/my-tickets" },
   { name: "Lịch Sử Giao Dịch", path: "/account/transactions" },
 ];
 

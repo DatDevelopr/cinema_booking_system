@@ -21,6 +21,9 @@ const Payment = require("./Payment")(sequelize, DataTypes);
 const User = require("./User")(sequelize, DataTypes);
 const Otp = require("./Otp")(sequelize, DataTypes);
 
+const UserPreference = require("./UserPreference")(sequelize, DataTypes);
+const UserMovieView = require("./UserMovieView")(sequelize, DataTypes);
+
 
 // ================= RELATION =================
 
@@ -86,6 +89,66 @@ Order.hasOne(Payment, { foreignKey: "order_id" });
 Payment.belongsTo(Order, { foreignKey: "order_id" });
 
 
+/*
+==================================================
+THÊM ASSOCIATION TRONG models/index.js
+==================================================
+*/
+
+/*
+USER PREFERENCES
+user -> many preferences
+genre -> many preferences
+*/
+
+User.hasMany(UserPreference, {
+  foreignKey: "user_id",
+});
+
+UserPreference.belongsTo(User, {
+  foreignKey: "user_id",
+});
+
+Genre.hasMany(UserPreference, {
+  foreignKey: "genre_id",
+});
+
+UserPreference.belongsTo(Genre, {
+  foreignKey: "genre_id",
+});
+
+
+/*
+USER MOVIE VIEWS
+user -> many viewed movies
+movie -> many viewers
+*/
+
+User.hasMany(UserMovieView, {
+  foreignKey: "user_id",
+});
+
+UserMovieView.belongsTo(User, {
+  foreignKey: "user_id",
+});
+
+Movie.hasMany(UserMovieView, {
+  foreignKey: "movie_id",
+});
+
+UserMovieView.belongsTo(Movie, {
+  foreignKey: "movie_id",
+});
+
+// Ticket - OrderTicket
+Ticket.hasMany(OrderTicket, { foreignKey: "ticket_id" });
+OrderTicket.belongsTo(Ticket, { foreignKey: "ticket_id" });
+
+// Order - OrderTicket
+Order.hasMany(OrderTicket, { foreignKey: "order_id" });
+OrderTicket.belongsTo(Order, { foreignKey: "order_id" });
+
+
 // ================= EXPORT =================
 
 module.exports = {
@@ -105,5 +168,7 @@ module.exports = {
   OrderService,
   Service,
   Payment,
-  User
+  User,
+  UserPreference,
+  UserMovieView,
 };
