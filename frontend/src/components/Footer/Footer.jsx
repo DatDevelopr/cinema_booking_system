@@ -14,18 +14,19 @@ import {
   ChevronRight,
   Sparkles
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
-import logo from "../../assets/images/logo_cinema.png";
+import logo from "../../assets/images/logo_cinema-removebg-preview.png";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
+  const navigate = useNavigate();
 
   const quickLinks = [
     { name: "Phim đang chiếu", path: "/movies" },
-    { name: "Phim sắp chiếu", path: "/movies/upcoming" },
+    { name: "Phim sắp chiếu", path: "/movies" },
     { name: "Suất chiếu", path: "/showtimes" },
-    { name: "Giá vé", path: "/pricing" },
-    { name: "Khuyến mãi", path: "/promotions" },
+    { name: "Rạp chiếu", path: "/cinemas" },
   ];
 
   const supportLinks = [
@@ -86,7 +87,6 @@ const Footer = () => {
           {/* Column 2 - Quick Links */}
           <div className="space-y-4">
             <h3 className="text-white text-lg font-semibold flex items-center gap-2">
-              <Film size={18} className="text-orange-500" />
               Liên kết nhanh
             </h3>
             <ul className="space-y-2">
@@ -107,7 +107,6 @@ const Footer = () => {
           {/* Column 3 - Support */}
           <div className="space-y-4">
             <h3 className="text-white text-lg font-semibold flex items-center gap-2">
-              <Ticket size={18} className="text-orange-500" />
               Hỗ trợ
             </h3>
             <ul className="space-y-2">
@@ -128,7 +127,6 @@ const Footer = () => {
           {/* Column 4 - Contact & Hours */}
           <div className="space-y-4">
             <h3 className="text-white text-lg font-semibold flex items-center gap-2">
-              <Clock size={18} className="text-orange-500" />
               Giờ mở cửa
             </h3>
             <ul className="space-y-2">
@@ -153,7 +151,7 @@ const Footer = () => {
               </div>
               <div className="flex items-center gap-3">
                 <Mail size={16} className="text-orange-500 flex-shrink-0" />
-                <span className="text-sm text-gray-400">info@cinema.com</span>
+                <span className="text-sm text-gray-400">nextgen.cine@cinema.com</span>
               </div>
             </div>
           </div>
@@ -178,7 +176,8 @@ const Footer = () => {
                 placeholder="Email của bạn"
                 className="flex-1 md:w-80 px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-l-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
               />
-              <button className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-medium rounded-r-lg transition-all duration-200">
+              <button className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-medium rounded-r-lg transition-all duration-200"
+                onClick={() => navigate(`/auth`)}>
                 Đăng ký
               </button>
             </div>

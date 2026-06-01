@@ -30,8 +30,8 @@ module.exports = (sequelize, DataTypes) => {
     },
 
     status: {
-      type: DataTypes.BOOLEAN, // 0 = inactive, 1 = active
-      defaultValue: true,
+      type: DataTypes.INTEGER, // 0 = inactive, 1 = active
+      defaultValue: 1,
     },
 
     stock: {

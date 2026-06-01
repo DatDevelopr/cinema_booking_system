@@ -137,7 +137,7 @@ export default function Register() {
     try {
       setLoading(true);
       const res = await authApi.register({ ...form, otp });
-      toast.success(res.data.message || "Đăng ký thành công! 🎉");
+      toast.success(res.data.message || "Đăng ký thành công");
       setForm(initialForm);
       setAgree(false);
       setShowOTP(false);

@@ -1,4 +1,4 @@
-// AdminTickets.jsx - Phiên bản debug
+// AdminTickets.jsx - Thêm chức năng hủy vé
 import { useEffect, useState, useCallback } from "react";
 import ticketApi from "../../../api/ticket.api";
 import useToast from "../../../hooks/useToastSimple";
@@ -24,6 +24,8 @@ import {
   User,
   Mail,
   Hash,
+  Ban,
+  Loader2,
 } from "lucide-react";
 
 const STATUS_MAP = {
@@ -50,6 +52,9 @@ export default function AdminTickets() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [cancellingId, setCancellingId] = useState(null); // ID vé đang hủy
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false); // Confirm dialog
+  const [ticketToCancel, setTicketToCancel] = useState(null); // Vé cần hủy
 
   // ───── fetch ─────
   const fetchTickets = useCallback(async (pageNum = 1) => {
@@ -79,7 +84,6 @@ export default function AdminTickets() {
     }
   }, [filters]);
 
-  // ✅ Chỉ gọi khi page thay đổi
   useEffect(() => {
     fetchTickets(page);
   }, [page]);
@@ -99,8 +103,46 @@ export default function AdminTickets() {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
-    } else {
-      console.warn("⚠️ [PAGE] Invalid page number:", newPage);
+    }
+  };
+
+  // ✅ Xử lý hủy vé
+  const handleCancelTicket = (ticket) => {
+    setTicketToCancel(ticket);
+    setShowCancelConfirm(true);
+  };
+
+  const confirmCancelTicket = async () => {
+    if (!ticketToCancel) return;
+    
+    try {
+      setCancellingId(ticketToCancel.ticket_id);
+      setShowCancelConfirm(false);
+      
+      await ticketApi.cancel(ticketToCancel.ticket_id);
+      
+      toast.success(`Đã hủy vé #${ticketToCancel.ticket_id}`);
+      
+      // Cập nhật local state
+      setTickets(prev => 
+        prev.map(t => 
+          t.ticket_id === ticketToCancel.ticket_id 
+            ? { ...t, ticket_status: "CANCELLED" } 
+            : t
+        )
+      );
+      
+      // Nếu đang xem chi tiết vé đó thì cập nhật
+      if (selectedTicket?.ticket_id === ticketToCancel.ticket_id) {
+        setSelectedTicket(prev => ({ ...prev, ticket_status: "CANCELLED" }));
+      }
+      
+    } catch (err) {
+      console.error("Cancel ticket error:", err);
+      toast.error(err?.response?.data?.message || "Không thể hủy vé");
+    } finally {
+      setCancellingId(null);
+      setTicketToCancel(null);
     }
   };
 
@@ -114,7 +156,6 @@ export default function AdminTickets() {
   };
 
   const getTicketInfo = (ticket) => {
-    
     const stSeat = ticket.ShowtimeSeat || {};
     const showtime = stSeat.Showtime || {};
     const movie = showtime.Movie || {};
@@ -150,13 +191,6 @@ export default function AdminTickets() {
     setShowDetailModal(true);
   };
 
-  // 🔍 DEBUG: Log state changes
-  useEffect(() => {
-  }, [tickets]);
-
-  useEffect(() => {
-  }, [filters]);
-
   // ───── render ─────
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
@@ -176,9 +210,7 @@ export default function AdminTickets() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  setShowFilters(!showFilters);
-                }}
+                onClick={() => setShowFilters(!showFilters)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   showFilters ? "bg-blue-600 text-white shadow-md" : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
@@ -187,9 +219,7 @@ export default function AdminTickets() {
                 Bộ lọc
               </button>
               <button
-                onClick={() => {
-                  fetchTickets(page);
-                }}
+                onClick={() => fetchTickets(page)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <RefreshCw size={16} />
@@ -206,9 +236,7 @@ export default function AdminTickets() {
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Trạng thái</label>
                   <select
                     value={filters.status}
-                    onChange={(e) => {
-                      setFilters((prev) => ({ ...prev, status: e.target.value }));
-                    }}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
                     className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
                     <option value="">Tất cả</option>
@@ -222,9 +250,7 @@ export default function AdminTickets() {
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5">Thời gian đặt</label>
                   <select
                     value={filters.time}
-                    onChange={(e) => {
-                      setFilters((prev) => ({ ...prev, time: e.target.value }));
-                    }}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, time: e.target.value }))}
                     className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
                     <option value="">Tất cả</option>
@@ -241,9 +267,7 @@ export default function AdminTickets() {
                       type="text"
                       placeholder="Tên phim..."
                       value={filters.search}
-                      onChange={(e) => {
-                        setFilters((prev) => ({ ...prev, search: e.target.value }));
-                      }}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     />
                   </div>
@@ -291,13 +315,13 @@ export default function AdminTickets() {
                   <th className="text-left p-4 text-gray-600 font-semibold text-xs uppercase tracking-wider">Ngày đặt</th>
                   <th className="text-left p-4 text-gray-600 font-semibold text-xs uppercase tracking-wider">Giá</th>
                   <th className="text-left p-4 text-gray-600 font-semibold text-xs uppercase tracking-wider">Trạng thái</th>
-                  <th className="text-center p-4 text-gray-600 font-semibold text-xs uppercase tracking-wider">Chi tiết</th>
+                  <th className="text-center p-4 text-gray-600 font-semibold text-xs uppercase tracking-wider">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-16">
+                    <td colSpan={7} className="text-center py-16">
                       <div className="flex justify-center">
                         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                       </div>
@@ -305,7 +329,7 @@ export default function AdminTickets() {
                   </tr>
                 ) : tickets.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-16 text-gray-500">
+                    <td colSpan={7} className="text-center py-16 text-gray-500">
                       <Ticket size={40} className="mx-auto mb-3 text-gray-300" />
                       Không tìm thấy vé nào
                     </td>
@@ -313,6 +337,9 @@ export default function AdminTickets() {
                 ) : (
                   tickets.map((ticket) => {
                     const info = getTicketInfo(ticket);
+                    const canCancel = ticket.ticket_status === "BOOKED";
+                    const isCancelling = cancellingId === ticket.ticket_id;
+
                     return (
                       <tr key={ticket.ticket_id} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors">
                         <td className="p-4">
@@ -355,13 +382,15 @@ export default function AdminTickets() {
                           <span className="text-sm font-semibold text-blue-600 whitespace-nowrap">{formatCurrency(info.price)}</span>
                         </td>
                         <td className="p-4">{getStatusBadge(ticket.ticket_status)}</td>
-                        <td className="p-4 text-center">
-                          <button
-                            onClick={() => handleViewDetail(ticket)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors"
-                          >
-                            <Eye size={14} /> Xem
-                          </button>
+                        <td className="p-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleViewDetail(ticket)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors"
+                            >
+                              <Eye size={14} /> Xem
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -409,18 +438,61 @@ export default function AdminTickets() {
         <TicketDetailModal
           ticket={selectedTicket}
           info={getTicketInfo(selectedTicket)}
-          onClose={() => {
+          onClose={() => setShowDetailModal(false)}
+          onCancel={() => {
             setShowDetailModal(false);
+            handleCancelTicket(selectedTicket);
           }}
+          cancellingId={cancellingId}
         />
       )}
+      {showCancelConfirm && ticketToCancel && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" onClick={() => setShowCancelConfirm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-scaleIn" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} className="text-red-500" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Xác nhận hủy vé</h3>
+              <p className="text-sm text-gray-500 mt-2">
+                Bạn có chắc chắn muốn hủy vé <span className="font-bold text-gray-700">#{ticketToCancel.ticket_id}</span> không?
+              </p>
+              <p className="text-xs text-red-500 mt-1">Hành động này không thể hoàn tác!</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Giữ lại
+              </button>
+              <button
+                onClick={confirmCancelTicket}
+                className="flex-1 px-4 py-2.5 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 transition-colors"
+              >
+                Xác nhận hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-scaleIn { animation: scaleIn 0.2s ease-out; }
+      `}</style>
     </div>
   );
 }
 
-// Component Modal Chi tiết vé
-function TicketDetailModal({ ticket, info, onClose }) {
-  
+// Component Modal Chi tiết vé (có nút Hủy)
+function TicketDetailModal({ ticket, info, onClose, onCancel, cancellingId }) {
+  const canCancel = ticket.ticket_status === "BOOKED";
+  const isCancelling = cancellingId === ticket.ticket_id;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" onClick={onClose}>
       <div
@@ -503,20 +575,27 @@ function TicketDetailModal({ ticket, info, onClose }) {
           </div>
         </div>
 
-        <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-end">
+        {/* Footer với nút Hủy */}
+        <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-between">
           <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
             Đóng
           </button>
+          {canCancel && (
+            <button
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {isCancelling ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Ban size={14} />
+              )}
+              Hủy vé
+            </button>
+          )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-scaleIn { animation: scaleIn 0.2s ease-out; }
-      `}</style>
     </div>
   );
 }

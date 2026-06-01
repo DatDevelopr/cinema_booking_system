@@ -108,23 +108,61 @@ exports.bookTickets = async (req, res) => {
       const serviceIds = service_items.map((i) => i.service_id);
 
       const services = await Service.findAll({
-        where: { service_id: { [Op.in]: serviceIds } },
+        where: {
+          service_id: {
+            [Op.in]: serviceIds,
+          },
+        },
         transaction: t,
+        lock: t.LOCK.UPDATE,
       });
 
       for (const item of service_items) {
-        const service = services.find((s) => s.service_id === item.service_id);
-        if (!service) continue;
+        const service = services.find(
+          (s) => s.service_id === item.service_id,
+        );
 
-        const amount = parseFloat(service.price) * (item.quantity || 1);
+        if (!service) {
+          await t.rollback();
+
+          return res.status(400).json({
+            success: false,
+            message: `Dịch vụ ${item.service_id} không tồn tại`,
+          });
+        }
+
+        const quantity = Number(item.quantity) || 1;
+
+        // kiểm tra tồn kho
+        if (service.stock < quantity) {
+          await t.rollback();
+
+          return res.status(400).json({
+            success: false,
+            message: `${service.name} chỉ còn ${service.stock} sản phẩm`,
+          });
+        }
+
+        const amount = parseFloat(service.price) * quantity;
+
         serviceTotal += amount;
 
         orderServiceData.push({
           service_id: service.service_id,
-          quantity: item.quantity || 1,
+          quantity,
           price: service.price,
           name_snapshot: service.name,
         });
+
+        // trừ tồn kho
+        await service.update(
+          {
+            stock: service.stock - quantity,
+          },
+          {
+            transaction: t,
+          },
+        );
       }
     }
 
@@ -459,20 +497,22 @@ exports.getAllTickets = async (req, res) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
 
-    const offset = (page - 1) * limit;
+    const { status, time, search } = req.query;
 
+    const offset = (page - 1) * limit;
     const now = new Date();
 
     const ticketWhere = {};
 
-    // filter status
+    /* ================= STATUS FILTER ================= */
     if (status) {
       ticketWhere.ticket_status = status;
     }
 
-    // filter booking time
+    /* ================= TIME FILTER ================= */
     if (time) {
-      let start, end;
+      let start;
+      let end;
 
       if (time === "today") {
         start = new Date();
@@ -502,12 +542,14 @@ exports.getAllTickets = async (req, res) => {
         end.setHours(23, 59, 59, 999);
       }
 
-      ticketWhere.booking_time = {
-        [Op.between]: [start, end],
-      };
+      if (start && end) {
+        ticketWhere.booking_time = {
+          [Op.between]: [start, end],
+        };
+      }
     }
 
-    // search movie
+    /* ================= MOVIE SEARCH ================= */
     let movieWhere = {};
 
     if (search) {
@@ -535,7 +577,6 @@ exports.getAllTickets = async (req, res) => {
       subQuery: false,
 
       include: [
-        // USER
         {
           model: OrderTicket,
           attributes: ["ticket_id"],
@@ -548,14 +589,18 @@ exports.getAllTickets = async (req, res) => {
               include: [
                 {
                   model: User,
-                  attributes: ["user_id", "full_name", "email", "phone"],
+                  attributes: [
+                    "user_id",
+                    "full_name",
+                    "email",
+                    "phone",
+                  ],
                 },
               ],
             },
           ],
         },
 
-        // SHOWTIME
         {
           model: ShowtimeSeat,
           required: true,
@@ -592,8 +637,8 @@ exports.getAllTickets = async (req, res) => {
               include: [
                 {
                   model: Movie,
-                  where: search ? movieWhere : undefined,
                   required: !!search,
+                  where: search ? movieWhere : undefined,
 
                   attributes: [
                     "movie_id",
@@ -630,13 +675,14 @@ exports.getAllTickets = async (req, res) => {
       ],
     });
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       data: rows,
       pagination: {
         total: count,
         page,
         limit,
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (err) {
@@ -645,6 +691,7 @@ exports.getAllTickets = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error",
+      error: err.message,
     });
   }
 };

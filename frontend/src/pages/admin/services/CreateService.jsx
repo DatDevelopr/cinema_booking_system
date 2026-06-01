@@ -175,7 +175,7 @@ const CreateService = () => {
         stock: Number(form.stock),
       });
 
-      toast.success("Tạo dịch vụ thành công! 🎉");
+      toast.success("Tạo dịch vụ thành công");
       setTimeout(() => {
         navigate("/admin/services");
       }, 1500);

@@ -9,8 +9,6 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import {
-  MapPin,
-  Phone,
   Mail,
   Loader2,
   ChevronRight,
@@ -110,13 +108,11 @@ export default function CinemaDetailPage() {
               </h3>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
-                  <MapPin size={18} className="text-orange-500 mt-1 shrink-0" />
                   <span>
                     <strong className="text-gray-900">Địa chỉ:</strong> {cinema.address}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Phone size={18} className="text-orange-500 shrink-0" />
                   <span>
                     <strong className="text-gray-900">Hotline:</strong> 1900 6467
                   </span>
@@ -147,7 +143,9 @@ export default function CinemaDetailPage() {
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-8">
               {hotMovies.map((movie, index) => (
-                <div key={movie.movie_id || index} className="flex flex-col group cursor-pointer">
+                <div key={movie.movie_id || index} className="flex flex-col group cursor-pointer"
+                  onClick={() => navigate(`/movies/${movie.movie_id}-${movie.slug}`)}
+                >
                   {/* Poster phim */}
                   <div className="relative aspect-[2/3] overflow-hidden rounded-xl mb-3">
                     <img

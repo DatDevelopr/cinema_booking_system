@@ -92,6 +92,7 @@ const EditService = () => {
       try {
         const res = await serviceApi.getById(id);
         const data = res.data;
+        console.log("Fetched service detail:", data);
 
         setForm({
           name: data.name || "",
@@ -114,7 +115,7 @@ const EditService = () => {
     };
 
     fetchDetail();
-  }, [id, navigate, toast]);
+  }, [id, navigate]);
 
   /* ================= HANDLE CHANGE ================= */
   const handleChange = (e) => {
@@ -208,7 +209,7 @@ const EditService = () => {
         stock: Number(form.stock),
       });
 
-      toast.success("Cập nhật dịch vụ thành công! 🎉");
+      toast.success("Cập nhật dịch vụ thành công");
       setTimeout(() => {
         navigate("/admin/services");
       }, 1500);
